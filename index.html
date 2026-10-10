@@ -1,0 +1,181 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة الزبائن</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <section id="loginView" class="login-page">
+    <form id="loginForm" class="login-card">
+      <div class="logo">CM</div>
+      <p class="eyebrow">CUSTOMER MANAGER</p>
+      <h1>إدارة الزبائن</h1>
+      <p class="muted">سجّل الدخول للمتابعة</p>
+
+      <label for="username">اسم المستخدم</label>
+      <input id="username" value="Admin" required autocomplete="username">
+
+      <label for="password">كلمة المرور</label>
+      <input id="password" type="password" required
+             autocomplete="current-password" placeholder="كلمة المرور">
+
+      <button class="btn primary full" type="submit">تسجيل الدخول</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </section>
+
+  <main id="appView" class="app hidden">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo small">CM</div>
+        <div>
+          <strong>إدارة الزبائن</strong>
+          <span>Customer Manager</span>
+        </div>
+      </div>
+      <button id="logoutBtn" class="btn outline">تسجيل الخروج</button>
+    </header>
+
+    <section class="welcome">
+      <div>
+        <p class="eyebrow">CUSTOMER DATABASE</p>
+        <h1>ملفات الزبائن</h1>
+        <p class="muted">إدارة الزبائن ومعلوماتهم في مكان واحد.</p>
+      </div>
+      <div class="stat">
+        <span>إجمالي الزبائن</span>
+        <strong id="customerCount">0</strong>
+      </div>
+    </section>
+
+    <div id="notice" class="notice hidden" role="status"></div>
+
+    <section class="workspace">
+      <aside class="panel customer-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>الزبائن</h2>
+            <p class="muted">ابحث واختر زبونًا</p>
+          </div>
+          <button id="newCustomerBtn" class="btn primary">+ زبون جديد</button>
+        </div>
+
+        <input id="searchInput" class="search"
+               placeholder="ابحث بالاسم أو رقم الزبون...">
+
+        <div id="customerList" class="customer-list">
+          <p class="muted">جارٍ تحميل الزبائن...</p>
+        </div>
+      </aside>
+
+      <section class="panel details-panel">
+        <div id="emptySelection" class="empty-state">
+          <div class="empty-icon">▤</div>
+          <h2>اختر زبونًا</h2>
+          <p class="muted">اختر زبونًا من القائمة لعرض معلوماته.</p>
+          <button id="emptyNewCustomerBtn" class="btn primary">
+            + إضافة زبون
+          </button>
+        </div>
+
+        <div id="customerDetails" class="hidden">
+          <div class="profile-header">
+            <div id="customerAvatar" class="avatar">ز</div>
+            <div class="profile-title">
+              <p class="eyebrow">CUSTOMER PROFILE</p>
+              <h2 id="profileName"></h2>
+              <p class="muted">
+                رقم الزبون:
+                <strong id="profileNumber"></strong>
+              </p>
+            </div>
+            <div class="actions">
+              <button id="editCustomerBtn" class="btn outline">تعديل</button>
+              <button id="deleteCustomerBtn" class="btn danger">حذف الزبون</button>
+            </div>
+          </div>
+
+          <div class="section-heading">
+            <div>
+              <h3>معلومات الزبون</h3>
+              <p class="muted">أضف ملاحظات أو تفاصيل أو مسارات ملفات.</p>
+            </div>
+            <button id="addItemBtn" class="btn primary">+ إضافة معلومة</button>
+          </div>
+
+          <div id="itemsList" class="items-list"></div>
+        </div>
+      </section>
+    </section>
+
+    <footer>Customer Manager · Supabase</footer>
+  </main>
+
+  <!-- نموذج إضافة وتعديل الزبون -->
+  <dialog id="customerDialog" class="modal">
+    <form id="customerForm">
+      <div class="modal-heading">
+        <h2 id="customerDialogTitle">إضافة زبون</h2>
+        <button type="button" class="close" data-close="customerDialog">×</button>
+      </div>
+
+      <input type="hidden" id="customerId">
+
+      <label for="customerNumber">رقم الزبون</label>
+      <input id="customerNumber" required placeholder="مثال: C-1001">
+
+      <label for="customerName">اسم الزبون</label>
+      <input id="customerName" required placeholder="اسم الزبون">
+
+      <p id="customerFormError" class="error"></p>
+
+      <div class="modal-actions">
+        <button type="button" class="btn outline" data-close="customerDialog">إلغاء</button>
+        <button type="submit" class="btn primary">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- نموذج إضافة وتعديل معلومات الزبون -->
+  <dialog id="itemDialog" class="modal">
+    <form id="itemForm">
+      <div class="modal-heading">
+        <h2 id="itemDialogTitle">إضافة معلومة</h2>
+        <button type="button" class="close" data-close="itemDialog">×</button>
+      </div>
+
+      <input type="hidden" id="itemId">
+
+      <label for="itemType">نوع المعلومة</label>
+      <input id="itemType" required placeholder="مثال: ملاحظة، عنوان، طلب">
+
+      <label for="itemText">التفاصيل</label>
+      <textarea id="itemText" rows="5" placeholder="اكتب المعلومات هنا..."></textarea>
+
+      <label for="itemFilePath">مسار الملف أو رابطه (اختياري)</label>
+      <input id="itemFilePath" placeholder="documents/file.pdf">
+
+      <label for="itemOriginalFileName">اسم الملف (اختياري)</label>
+      <input id="itemOriginalFileName" placeholder="file.pdf">
+
+      <p class="muted small-note">
+        هذه الحقول تحفظ مسار الملف واسمه فقط، ولا ترفع الملفات فعليًا.
+      </p>
+
+      <p id="itemFormError" class="error"></p>
+
+      <div class="modal-actions">
+        <button type="button" class="btn outline" data-close="itemDialog">إلغاء</button>
+        <button type="submit" class="btn primary">حفظ المعلومة</button>
+      </div>
+    </form>
+  </dialog>
+
+</body>
+</html>
