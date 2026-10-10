@@ -6,13 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f4f7fb">
     <title>Customer Manager</title>
+
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
 
-    <!-- Login -->
     <section id="loginView" class="login-page">
         <div class="login-card">
             <div class="brand-icon">CM</div>
@@ -21,24 +21,14 @@
 
             <form id="loginForm">
                 <label for="username">Username</label>
-                <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    placeholder="Enter your username"
-                    autocomplete="username"
-                    required
-                >
+                <input id="username" type="text"
+                       placeholder="Enter your username"
+                       autocomplete="username" required>
 
                 <label for="password">Password</label>
-                <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                    required
-                >
+                <input id="password" type="password"
+                       placeholder="Enter your password"
+                       autocomplete="current-password" required>
 
                 <p id="loginError" class="error-message" role="alert"></p>
                 <button type="submit" class="primary-button full-width">
@@ -50,7 +40,6 @@
         </div>
     </section>
 
-    <!-- Main application -->
     <div id="appView" class="app hidden">
         <header class="topbar">
             <div class="brand">
@@ -60,10 +49,7 @@
                     <p>Customer information portal</p>
                 </div>
             </div>
-
-            <button id="logoutBtn" class="secondary-button">
-                Log Out
-            </button>
+            <button id="logoutBtn" class="secondary-button">Log Out</button>
         </header>
 
         <main class="dashboard">
@@ -72,16 +58,15 @@
                     <h2>Customers</h2>
                     <p class="muted">Manage your customer information in one place.</p>
                 </div>
-
                 <button id="addCustomerBtn" class="primary-button">
-                    <span aria-hidden="true">＋</span> Add Customer
+                    + Add Customer
                 </button>
             </section>
 
             <div id="notice" class="notice hidden" role="status"></div>
 
             <section class="summary-card">
-                <div class="summary-icon" aria-hidden="true">👥</div>
+                <div class="summary-icon">👥</div>
                 <div>
                     <p class="summary-label">Total Customers</p>
                     <strong id="customerCount">0</strong>
@@ -95,13 +80,10 @@
                     </div>
 
                     <div class="search-box">
-                        <span aria-hidden="true">⌕</span>
-                        <input
-                            id="searchInput"
-                            type="search"
-                            placeholder="Search by name or number..."
-                            aria-label="Search customers"
-                        >
+                        <span>⌕</span>
+                        <input id="searchInput" type="search"
+                               placeholder="Search by name or number..."
+                               aria-label="Search customers">
                     </div>
 
                     <div id="customerList" class="customer-list">
@@ -111,7 +93,7 @@
 
                 <section class="details-panel">
                     <div id="emptySelection" class="empty-state">
-                        <div class="empty-icon" aria-hidden="true">👤</div>
+                        <div class="empty-icon">👤</div>
                         <h3>No Customer Selected</h3>
                         <p>Select a customer from the list to view their information.</p>
                         <button id="emptyAddCustomerBtn" class="primary-button">
@@ -125,10 +107,7 @@
 
                             <div class="profile-info">
                                 <h2 id="profileName">Customer Name</h2>
-                                <p>
-                                    Customer No.:
-                                    <strong id="profileNumber"></strong>
-                                </p>
+                                <p>Customer No.: <strong id="profileNumber"></strong></p>
                             </div>
 
                             <div class="profile-actions">
@@ -161,10 +140,9 @@
 
                         <div class="section-heading items-heading">
                             <div>
-                                <h3>Notes &amp; Items</h3>
-                                <p class="muted">Information saved for this customer</p>
+                                <h3>Notes &amp; Information</h3>
+                                <p class="muted">Notes saved for this customer</p>
                             </div>
-
                             <button id="addItemBtn" class="primary-button">
                                 + Add Note
                             </button>
@@ -183,7 +161,6 @@
         </main>
     </div>
 
-    <!-- Add/Edit Customer Dialog -->
     <dialog id="customerDialog" class="app-dialog">
         <form id="customerForm">
             <div class="dialog-header">
@@ -196,22 +173,12 @@
             </div>
 
             <label for="customerNameInput">Customer Name *</label>
-            <input
-                id="customerNameInput"
-                type="text"
-                maxlength="200"
-                placeholder="Enter customer name"
-                required
-            >
+            <input id="customerNameInput" type="text" maxlength="200"
+                   placeholder="Enter customer name" required>
 
             <label for="customerNumberInput">Customer Number *</label>
-            <input
-                id="customerNumberInput"
-                type="text"
-                maxlength="100"
-                placeholder="e.g. CUST-001"
-                required
-            >
+            <input id="customerNumberInput" type="text" maxlength="100"
+                   placeholder="e.g. CUST-001" required>
 
             <p id="customerFormError" class="error-message" role="alert"></p>
 
@@ -226,7 +193,6 @@
         </form>
     </dialog>
 
-    <!-- Add/Edit Note Dialog -->
     <dialog id="itemDialog" class="app-dialog">
         <form id="itemForm">
             <div class="dialog-header">
@@ -240,19 +206,13 @@
 
             <label for="itemTypeInput">Type</label>
             <select id="itemTypeInput">
-                <option value="Note">Note</option>
-                <option value="Task">Task</option>
-                <option value="General Information">General Information</option>
+                <option value="Text">Text</option>
             </select>
 
             <label for="itemTextInput">Details *</label>
-            <textarea
-                id="itemTextInput"
-                rows="5"
-                maxlength="10000"
-                placeholder="Enter notes or customer information..."
-                required
-            ></textarea>
+            <textarea id="itemTextInput" rows="5" maxlength="10000"
+                      placeholder="Enter notes or customer information..."
+                      required></textarea>
 
             <p id="itemFormError" class="error-message" role="alert"></p>
 

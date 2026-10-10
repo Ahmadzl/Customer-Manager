@@ -5,13 +5,14 @@
 // 1. SUPABASE CONFIGURATION
 // ==========================================
 
-const SUPABASE_URL = "https://sxbkjoxmujohptobmqwz.supabase.co";
+const SUPABASE_URL =
+    "https://sxbkjoxmujohptobmqwz.supabase.co";
+
 const SUPABASE_PUBLISHABLE_KEY =
     "sb_publishable_ffkDrUOb1jg09hzn4Bp0Nw_siCRHeYF";
 
 const APP_USERNAME = "Admin";
 const APP_PASSWORD = "Venture.321";
-
 const SESSION_KEY = "customer_manager_logged_in";
 
 const db = window.supabase.createClient(
@@ -54,7 +55,6 @@ const profileNumber = document.getElementById("profileNumber");
 const customerAvatar = document.getElementById("customerAvatar");
 const infoName = document.getElementById("infoName");
 const infoNumber = document.getElementById("infoNumber");
-
 const itemsList = document.getElementById("itemsList");
 
 const customerDialog = document.getElementById("customerDialog");
@@ -80,9 +80,6 @@ const saveItemBtn = document.getElementById("saveItemBtn");
 function showNotice(message, type = "success") {
     notice.textContent = message;
     notice.className = `notice ${type}`;
-    notice.classList.remove("hidden");
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function hideNotice() {
@@ -99,9 +96,7 @@ function formatDate(value) {
 
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
+    if (Number.isNaN(date.getTime())) return "";
 
     return new Intl.DateTimeFormat("en", {
         dateStyle: "medium",
@@ -126,8 +121,12 @@ function getErrorMessage(error) {
         return "This record is linked to other information and could not be changed.";
     }
 
+    if (error.code === "23514") {
+        return "The information does not match the database rules. Please check the item type and content.";
+    }
+
     if (error.code === "42501" || error.code === "PGRST301") {
-        return "Database access was denied. Check your Supabase permissions and Row Level Security policies.";
+        return "Database access was denied. Check your Supabase permissions and RLS policies.";
     }
 
     return error.message || "An unexpected error occurred. Please try again.";
@@ -139,7 +138,7 @@ function setButtonLoading(button, loading, normalText) {
 }
 
 // ==========================================
-// 5. LOGIN / LOGOUT
+// 5. LOGIN AND LOGOUT
 // ==========================================
 
 function showLogin() {
@@ -158,26 +157,26 @@ loginForm.addEventListener("submit", async function (event) {
     const username = usernameInput.value.trim();
     const password = passwordInput.value;
 
-    if (username === APP_USERNAME && password === APP_PASSWORD) {
-        sessionStorage.setItem(SESSION_KEY, "true");
-
-        setError(loginError);
-        passwordInput.value = "";
-
-        showApplication();
-        hideNotice();
-
-        try {
-            await loadCustomers();
-        } catch (error) {
-            showNotice(
-                "Could not load customers: " + getErrorMessage(error),
-                "error"
-            );
-        }
-    } else {
+    if (username !== APP_USERNAME || password !== APP_PASSWORD) {
         setError(loginError, "Incorrect username or password.");
         passwordInput.select();
+        return;
+    }
+
+    sessionStorage.setItem(SESSION_KEY, "true");
+    setError(loginError);
+    passwordInput.value = "";
+
+    showApplication();
+    hideNotice();
+
+    try {
+        await loadCustomers();
+    } catch (error) {
+        showNotice(
+            "Could not load customers: " + getErrorMessage(error),
+            "error"
+        );
     }
 });
 
@@ -188,13 +187,16 @@ logoutBtn.addEventListener("click", function () {
     customerItems = [];
     selectedCustomerId = null;
 
+    customerList.replaceChildren();
+    itemsList.replaceChildren();
+
     showLogin();
     hideNotice();
     loginForm.reset();
 });
 
 // ==========================================
-// 6. CUSTOMER DATABASE FUNCTIONS
+// 6. LOAD AND DISPLAY CUSTOMERS
 // ==========================================
 
 async function loadCustomers() {
@@ -210,23 +212,19 @@ async function loadCustomers() {
         .select("id, customer_number, customer_name, created_at, updated_at")
         .order("customer_name", { ascending: true });
 
-    if (error) {
-        customerList.replaceChildren();
-        throw error;
-    }
+    if (error) throw error;
 
     customers = data || [];
-
     customerCount.textContent = String(customers.length);
 
     renderCustomerList();
 
     if (selectedCustomerId) {
-        const stillExists = customers.some(
+        const exists = customers.some(
             customer => customer.id === selectedCustomerId
         );
 
-        if (stillExists) {
+        if (exists) {
             await selectCustomer(selectedCustomerId);
             return;
         }
@@ -248,14 +246,14 @@ function renderCustomerList() {
 
     const searchTerm = searchInput.value.trim().toLowerCase();
 
-    const filteredCustomers = customers.filter(customer => {
+    const filtered = customers.filter(customer => {
         const name = (customer.customer_name || "").toLowerCase();
         const number = (customer.customer_number || "").toLowerCase();
 
         return name.includes(searchTerm) || number.includes(searchTerm);
     });
 
-    if (filteredCustomers.length === 0) {
+    if (filtered.length === 0) {
         const empty = document.createElement("p");
         empty.className = "muted list-empty";
         empty.textContent = searchTerm
@@ -266,7 +264,7 @@ function renderCustomerList() {
         return;
     }
 
-    filteredCustomers.forEach(customer => {
+    filtered.forEach(customer => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "customer-entry";
@@ -292,8 +290,9 @@ function renderCustomerList() {
         button.append(avatar, textContainer);
 
         button.addEventListener("click", async function () {
+            hideNotice();
+
             try {
-                hideNotice();
                 await selectCustomer(customer.id);
             } catch (error) {
                 showNotice(
@@ -331,12 +330,11 @@ async function selectCustomer(customerId) {
     customerDetails.classList.remove("hidden");
 
     renderCustomerList();
-
     await loadItems(customerId);
 }
 
 // ==========================================
-// 7. ADD / EDIT CUSTOMER
+// 7. ADD AND EDIT CUSTOMERS
 // ==========================================
 
 function openCustomerDialog(customer = null) {
@@ -353,20 +351,16 @@ function openCustomerDialog(customer = null) {
         ? "Save Changes"
         : "Save Customer";
 
-    customerNameInput.value = customer
-        ? customer.customer_name
-        : "";
-
-    customerNumberInput.value = customer
-        ? customer.customer_number
-        : "";
+    customerNameInput.value = customer ? customer.customer_name : "";
+    customerNumberInput.value = customer ? customer.customer_number : "";
 
     customerDialog.showModal();
     customerNameInput.focus();
 }
 
 function closeCustomerDialog() {
-    customerDialog.close();
+    if (customerDialog.open) customerDialog.close();
+
     customerForm.reset();
     setError(customerFormError);
     editingCustomerId = null;
@@ -383,13 +377,14 @@ document.getElementById("emptyAddCustomerBtn").addEventListener("click", functio
 document.getElementById("editCustomerBtn").addEventListener("click", function () {
     const customer = customers.find(item => item.id === selectedCustomerId);
 
-    if (customer) {
-        openCustomerDialog(customer);
-    }
+    if (customer) openCustomerDialog(customer);
 });
 
-document.getElementById("closeCustomerDialog").addEventListener("click", closeCustomerDialog);
-document.getElementById("cancelCustomerBtn").addEventListener("click", closeCustomerDialog);
+document.getElementById("closeCustomerDialog")
+    .addEventListener("click", closeCustomerDialog);
+
+document.getElementById("cancelCustomerBtn")
+    .addEventListener("click", closeCustomerDialog);
 
 customerForm.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -402,9 +397,8 @@ customerForm.addEventListener("submit", async function (event) {
         return;
     }
 
-    const originalText = editingCustomerId
-        ? "Save Changes"
-        : "Save Customer";
+    const wasEditing = Boolean(editingCustomerId);
+    const originalText = wasEditing ? "Save Changes" : "Save Customer";
 
     setButtonLoading(saveCustomerBtn, true, originalText);
     setError(customerFormError);
@@ -412,7 +406,7 @@ customerForm.addEventListener("submit", async function (event) {
     try {
         let result;
 
-        if (editingCustomerId) {
+        if (wasEditing) {
             result = await db
                 .from("customers")
                 .update({
@@ -437,9 +431,7 @@ customerForm.addEventListener("submit", async function (event) {
                 .single();
         }
 
-        if (result.error) {
-            throw result.error;
-        }
+        if (result.error) throw result.error;
 
         if (!result.data) {
             throw new Error(
@@ -447,13 +439,9 @@ customerForm.addEventListener("submit", async function (event) {
             );
         }
 
-        const savedId = result.data.id;
-        const wasEditing = Boolean(editingCustomerId);
+        selectedCustomerId = result.data.id;
 
         closeCustomerDialog();
-
-        selectedCustomerId = savedId;
-
         await loadCustomers();
 
         showNotice(
@@ -470,49 +458,39 @@ customerForm.addEventListener("submit", async function (event) {
 });
 
 // ==========================================
-// 8. DELETE CUSTOMER
+// 8. DELETE CUSTOMERS
 // ==========================================
 
 document.getElementById("deleteCustomerBtn").addEventListener("click", async function () {
     const customer = customers.find(item => item.id === selectedCustomerId);
 
-    if (!customer) {
-        return;
-    }
+    if (!customer) return;
 
     const confirmed = window.confirm(
         `Are you sure you want to delete "${customer.customer_name}"?\n\n` +
-        "All notes and information belonging to this customer will also be deleted."
+        "All notes belonging to this customer will also be deleted."
     );
 
-    if (!confirmed) {
-        return;
-    }
+    if (!confirmed) return;
 
     const button = document.getElementById("deleteCustomerBtn");
     button.disabled = true;
 
     try {
-        // Delete the customer's related items first.
         const { error: itemsError } = await db
             .from("customer_items")
             .delete()
             .eq("customer_id", customer.id);
 
-        if (itemsError) {
-            throw itemsError;
-        }
+        if (itemsError) throw itemsError;
 
-        // Then delete the customer.
         const { data, error } = await db
             .from("customers")
             .delete()
             .eq("id", customer.id)
             .select("id");
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         if (!data || data.length === 0) {
             throw new Error(
@@ -524,7 +502,6 @@ document.getElementById("deleteCustomerBtn").addEventListener("click", async fun
         customerItems = [];
 
         await loadCustomers();
-
         showNotice("Customer deleted successfully.", "success");
     } catch (error) {
         showNotice(
@@ -537,7 +514,7 @@ document.getElementById("deleteCustomerBtn").addEventListener("click", async fun
 });
 
 // ==========================================
-// 9. CUSTOMER NOTES / ITEMS
+// 9. LOAD AND DISPLAY CUSTOMER NOTES
 // ==========================================
 
 async function loadItems(customerId) {
@@ -550,17 +527,16 @@ async function loadItems(customerId) {
 
     const { data, error } = await db
         .from("customer_items")
-        .select("id, customer_id, type, text, file_path, original_file_name, sort_order, created_at")
+        .select(
+            "id, customer_id, type, text, file_path, original_file_name, sort_order, created_at"
+        )
         .eq("customer_id", customerId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
 
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     customerItems = data || [];
-
     renderItems();
 }
 
@@ -570,7 +546,9 @@ function renderItems() {
     if (customerItems.length === 0) {
         const empty = document.createElement("p");
         empty.className = "muted list-empty";
-        empty.textContent = "No notes or information have been added for this customer yet.";
+        empty.textContent =
+            "No notes or information have been added for this customer yet.";
+
         itemsList.appendChild(empty);
         return;
     }
@@ -584,7 +562,7 @@ function renderItems() {
 
         const type = document.createElement("span");
         type.className = "item-type";
-        type.textContent = item.type || "Note";
+        type.textContent = item.type || "Text";
 
         const date = document.createElement("span");
         date.className = "item-date";
@@ -605,7 +583,6 @@ function renderItems() {
         editButton.type = "button";
         editButton.className = "small-button";
         editButton.textContent = "Edit";
-
         editButton.addEventListener("click", function () {
             openItemDialog(item);
         });
@@ -614,17 +591,19 @@ function renderItems() {
         deleteButton.type = "button";
         deleteButton.className = "small-button delete";
         deleteButton.textContent = "Delete";
-
-        deleteButton.addEventListener("click", async function () {
-            await deleteItem(item);
+        deleteButton.addEventListener("click", function () {
+            deleteItem(item);
         });
 
         actions.append(editButton, deleteButton);
         card.appendChild(actions);
-
         itemsList.appendChild(card);
     });
 }
+
+// ==========================================
+// 10. ADD AND EDIT NOTES
+// ==========================================
 
 function openItemDialog(item = null) {
     if (!selectedCustomerId) {
@@ -640,7 +619,8 @@ function openItemDialog(item = null) {
     itemDialogTitle.textContent = item ? "Edit Information" : "Add Note";
     saveItemBtn.textContent = item ? "Save Changes" : "Save Information";
 
-    itemTypeInput.value = item ? (item.type || "Note") : "Note";
+    // The existing database constraint accepts "Text" for text notes.
+    itemTypeInput.value = "Text";
     itemTextInput.value = item ? (item.text || "") : "";
 
     itemDialog.showModal();
@@ -648,7 +628,8 @@ function openItemDialog(item = null) {
 }
 
 function closeItemDialog() {
-    itemDialog.close();
+    if (itemDialog.open) itemDialog.close();
+
     itemForm.reset();
     setError(itemFormError);
     editingItemId = null;
@@ -658,8 +639,11 @@ document.getElementById("addItemBtn").addEventListener("click", function () {
     openItemDialog();
 });
 
-document.getElementById("closeItemDialog").addEventListener("click", closeItemDialog);
-document.getElementById("cancelItemBtn").addEventListener("click", closeItemDialog);
+document.getElementById("closeItemDialog")
+    .addEventListener("click", closeItemDialog);
+
+document.getElementById("cancelItemBtn")
+    .addEventListener("click", closeItemDialog);
 
 itemForm.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -669,7 +653,6 @@ itemForm.addEventListener("submit", async function (event) {
         return;
     }
 
-    const itemType = itemTypeInput.value;
     const itemText = itemTextInput.value.trim();
 
     if (!itemText) {
@@ -677,9 +660,8 @@ itemForm.addEventListener("submit", async function (event) {
         return;
     }
 
-    const originalText = editingItemId
-        ? "Save Changes"
-        : "Save Information";
+    const wasEditing = Boolean(editingItemId);
+    const originalText = wasEditing ? "Save Changes" : "Save Information";
 
     setButtonLoading(saveItemBtn, true, originalText);
     setError(itemFormError);
@@ -687,12 +669,14 @@ itemForm.addEventListener("submit", async function (event) {
     try {
         let result;
 
-        if (editingItemId) {
+        if (wasEditing) {
+            // Keep the existing record as a text item.
             result = await db
                 .from("customer_items")
                 .update({
-                    type: itemType,
-                    text: itemText
+                    type: "Text",
+                    text: itemText,
+                    file_path: null
                 })
                 .eq("id", editingItemId)
                 .eq("customer_id", selectedCustomerId)
@@ -700,15 +684,22 @@ itemForm.addEventListener("submit", async function (event) {
                 .maybeSingle();
         } else {
             const nextOrder = customerItems.length > 0
-                ? Math.max(...customerItems.map(item => Number(item.sort_order) || 0)) + 1
+                ? Math.max(
+                    ...customerItems.map(
+                        item => Number(item.sort_order) || 0
+                    )
+                ) + 1
                 : 1;
 
+            // Important: type must be "Text", not "Note" or "Task".
+            // The current database constraint requires text NOT NULL
+            // and file_path NULL for a Text item.
             result = await db
                 .from("customer_items")
                 .insert({
                     id: crypto.randomUUID(),
                     customer_id: selectedCustomerId,
-                    type: itemType,
+                    type: "Text",
                     text: itemText,
                     file_path: null,
                     original_file_name: null,
@@ -719,17 +710,13 @@ itemForm.addEventListener("submit", async function (event) {
                 .single();
         }
 
-        if (result.error) {
-            throw result.error;
-        }
+        if (result.error) throw result.error;
 
         if (!result.data) {
             throw new Error(
                 "The information was not saved. Check your database permissions."
             );
         }
-
-        const wasEditing = Boolean(editingItemId);
 
         closeItemDialog();
         await loadItems(selectedCustomerId);
@@ -747,14 +734,16 @@ itemForm.addEventListener("submit", async function (event) {
     }
 });
 
+// ==========================================
+// 11. DELETE NOTES
+// ==========================================
+
 async function deleteItem(item) {
     const confirmed = window.confirm(
         "Are you sure you want to delete this information?"
     );
 
-    if (!confirmed) {
-        return;
-    }
+    if (!confirmed) return;
 
     try {
         const { data, error } = await db
@@ -764,9 +753,7 @@ async function deleteItem(item) {
             .eq("customer_id", selectedCustomerId)
             .select("id");
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         if (!data || data.length === 0) {
             throw new Error(
@@ -785,13 +772,13 @@ async function deleteItem(item) {
 }
 
 // ==========================================
-// 10. SEARCH
+// 12. SEARCH
 // ==========================================
 
 searchInput.addEventListener("input", renderCustomerList);
 
 // ==========================================
-// 11. START APPLICATION
+// 13. START APPLICATION
 // ==========================================
 
 async function startApplication() {
