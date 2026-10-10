@@ -1,611 +1,815 @@
 
+"use strict";
+
+// ==========================================
+// 1. SUPABASE CONFIGURATION
+// ==========================================
+
 const SUPABASE_URL = "https://sxbkjoxmujohptobmqwz.supabase.co";
-
 const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_ffkDrUOb1jg09hzn4Bp0Nw_siCRHeYF";
+    "sb_publishable_ffkDrUOb1jg09hzn4Bp0Nw_siCRHeYF";
 
-// تسجيل دخول بسيط للواجهة فقط
 const APP_USERNAME = "Admin";
 const APP_PASSWORD = "Venture.321";
 
+const SESSION_KEY = "customer_manager_logged_in";
+
 const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
 );
 
-const $ = (id) => document.getElementById(id);
+// ==========================================
+// 2. APPLICATION STATE
+// ==========================================
 
-const state = {
-  customers: [],
-  selectedCustomer: null,
-  items: []
-};
+let customers = [];
+let selectedCustomerId = null;
+let customerItems = [];
+let editingCustomerId = null;
+let editingItemId = null;
 
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (ch) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[ch]);
+// ==========================================
+// 3. DOM ELEMENTS
+// ==========================================
+
+const loginView = document.getElementById("loginView");
+const appView = document.getElementById("appView");
+const loginForm = document.getElementById("loginForm");
+const usernameInput = document.getElementById("username");
+const passwordInput = document.getElementById("password");
+const loginError = document.getElementById("loginError");
+const logoutBtn = document.getElementById("logoutBtn");
+
+const customerCount = document.getElementById("customerCount");
+const notice = document.getElementById("notice");
+const searchInput = document.getElementById("searchInput");
+const customerList = document.getElementById("customerList");
+
+const emptySelection = document.getElementById("emptySelection");
+const customerDetails = document.getElementById("customerDetails");
+
+const profileName = document.getElementById("profileName");
+const profileNumber = document.getElementById("profileNumber");
+const customerAvatar = document.getElementById("customerAvatar");
+const infoName = document.getElementById("infoName");
+const infoNumber = document.getElementById("infoNumber");
+
+const itemsList = document.getElementById("itemsList");
+
+const customerDialog = document.getElementById("customerDialog");
+const customerForm = document.getElementById("customerForm");
+const customerDialogTitle = document.getElementById("customerDialogTitle");
+const customerNameInput = document.getElementById("customerNameInput");
+const customerNumberInput = document.getElementById("customerNumberInput");
+const customerFormError = document.getElementById("customerFormError");
+const saveCustomerBtn = document.getElementById("saveCustomerBtn");
+
+const itemDialog = document.getElementById("itemDialog");
+const itemForm = document.getElementById("itemForm");
+const itemDialogTitle = document.getElementById("itemDialogTitle");
+const itemTypeInput = document.getElementById("itemTypeInput");
+const itemTextInput = document.getElementById("itemTextInput");
+const itemFormError = document.getElementById("itemFormError");
+const saveItemBtn = document.getElementById("saveItemBtn");
+
+// ==========================================
+// 4. GENERAL HELPERS
+// ==========================================
+
+function showNotice(message, type = "success") {
+    notice.textContent = message;
+    notice.className = `notice ${type}`;
+    notice.classList.remove("hidden");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function initials(name = "") {
-  return name.trim().slice(0, 1) || "ز";
+function hideNotice() {
+    notice.textContent = "";
+    notice.className = "notice hidden";
+}
+
+function setError(element, message = "") {
+    element.textContent = message;
 }
 
 function formatDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("ar", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  });
-}
+    if (!value) return "";
 
-function showNotice(message, type = "success") {
-  const notice = $("notice");
-  notice.textContent = message;
-  notice.className = `notice ${type}`;
+    const date = new Date(value);
 
-  clearTimeout(showNotice.timer);
-  showNotice.timer = setTimeout(() => {
-    notice.classList.add("hidden");
-  }, 5000);
-}
-
-function showError(id, message = "") {
-  $(id).textContent = message;
-}
-
-// تسجيل الدخول
-$("loginForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  const username = $("username").value.trim();
-  const password = $("password").value;
-
-  if (
-    username === APP_USERNAME &&
-    password === APP_PASSWORD
-  ) {
-    sessionStorage.setItem("customerManagerLoggedIn", "yes");
-    $("loginError").textContent = "";
-    $("password").value = "";
-    showApp();
-  } else {
-    showError(
-      "loginError",
-      "اسم المستخدم أو كلمة المرور غير صحيحة."
-    );
-  }
-});
-
-$("logoutBtn").addEventListener("click", () => {
-  sessionStorage.removeItem("customerManagerLoggedIn");
-
-  state.selectedCustomer = null;
-  state.items = [];
-
-  $("appView").classList.add("hidden");
-  $("loginView").classList.remove("hidden");
-  $("customerDetails").classList.add("hidden");
-  $("emptySelection").classList.remove("hidden");
-});
-
-// عرض التطبيق
-function showApp() {
-  $("loginView").classList.add("hidden");
-  $("appView").classList.remove("hidden");
-  loadCustomers();
-}
-
-// تحميل الزبائن من قاعدة البيانات
-async function loadCustomers(selectId = null) {
-  $("customerList").innerHTML =
-    '<p class="muted">جارٍ تحميل الزبائن...</p>';
-
-  const { data, error } = await db
-    .from("customers")
-    .select("id, customer_number, customer_name, created_at, updated_at")
-    .order("customer_name", { ascending: true });
-
-  if (error) {
-    $("customerList").innerHTML =
-      '<p class="muted">تعذّر تحميل الزبائن.</p>';
-
-    showNotice(
-      `خطأ في تحميل الزبائن: ${error.message}`,
-      "error"
-    );
-
-    return;
-  }
-
-  state.customers = data || [];
-  $("customerCount").textContent = state.customers.length;
-
-  renderCustomers();
-
-  const targetId = selectId || state.selectedCustomer?.id;
-
-  if (targetId) {
-    const customer = state.customers.find(
-      (c) => c.id === targetId
-    );
-
-    if (customer) {
-      await selectCustomer(customer);
-    } else {
-      clearSelection();
+    if (Number.isNaN(date.getTime())) {
+        return "";
     }
-  } else if (state.customers.length) {
-    await selectCustomer(state.customers[0]);
-  } else {
-    clearSelection();
-  }
+
+    return new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short"
+    }).format(date);
 }
 
-// عرض قائمة الزبائن والبحث
-function renderCustomers() {
-  const query = $("searchInput").value
-    .trim()
-    .toLocaleLowerCase();
+function getInitial(name) {
+    return (name || "C").trim().charAt(0).toUpperCase() || "C";
+}
 
-  const filtered = state.customers.filter((customer) => {
-    const name = String(customer.customer_name || "")
-      .toLocaleLowerCase();
+function getErrorMessage(error) {
+    if (!error) {
+        return "An unexpected error occurred.";
+    }
 
-    const number = String(customer.customer_number || "")
-      .toLocaleLowerCase();
+    if (error.code === "23505") {
+        return "This customer number already exists. Please use a different number.";
+    }
 
-    return name.includes(query) || number.includes(query);
-  });
+    if (error.code === "23503") {
+        return "This record is linked to other information and could not be changed.";
+    }
 
-  if (!filtered.length) {
-    $("customerList").innerHTML =
-      '<p class="muted">لا توجد نتائج مطابقة.</p>';
-    return;
-  }
+    if (error.code === "42501" || error.code === "PGRST301") {
+        return "Database access was denied. Check your Supabase permissions and Row Level Security policies.";
+    }
 
-  $("customerList").innerHTML = filtered.map((customer) => `
-    <button
-      class="customer-row ${
-        state.selectedCustomer?.id === customer.id ? "active" : ""
-      }"
-      data-customer-id="${escapeHtml(customer.id)}"
-      type="button">
+    return error.message || "An unexpected error occurred. Please try again.";
+}
 
-      <span class="mini-avatar">
-        ${escapeHtml(initials(customer.customer_name))}
-      </span>
+function setButtonLoading(button, loading, normalText) {
+    button.disabled = loading;
+    button.textContent = loading ? "Please wait..." : normalText;
+}
 
-      <span class="row-text">
-        <strong>${escapeHtml(customer.customer_name)}</strong>
-        <small>${escapeHtml(customer.customer_number)}</small>
-      </span>
+// ==========================================
+// 5. LOGIN / LOGOUT
+// ==========================================
 
-      <span>‹</span>
-    </button>
-  `).join("");
+function showLogin() {
+    loginView.classList.remove("hidden");
+    appView.classList.add("hidden");
+}
 
-  document.querySelectorAll("[data-customer-id]")
-    .forEach((button) => {
-      button.addEventListener("click", () => {
-        const customer = state.customers.find(
-          (c) => c.id === button.dataset.customerId
+function showApplication() {
+    loginView.classList.add("hidden");
+    appView.classList.remove("hidden");
+}
+
+loginForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    if (username === APP_USERNAME && password === APP_PASSWORD) {
+        sessionStorage.setItem(SESSION_KEY, "true");
+
+        setError(loginError);
+        passwordInput.value = "";
+
+        showApplication();
+        hideNotice();
+
+        try {
+            await loadCustomers();
+        } catch (error) {
+            showNotice(
+                "Could not load customers: " + getErrorMessage(error),
+                "error"
+            );
+        }
+    } else {
+        setError(loginError, "Incorrect username or password.");
+        passwordInput.select();
+    }
+});
+
+logoutBtn.addEventListener("click", function () {
+    sessionStorage.removeItem(SESSION_KEY);
+
+    customers = [];
+    customerItems = [];
+    selectedCustomerId = null;
+
+    showLogin();
+    hideNotice();
+    loginForm.reset();
+});
+
+// ==========================================
+// 6. CUSTOMER DATABASE FUNCTIONS
+// ==========================================
+
+async function loadCustomers() {
+    customerList.replaceChildren();
+
+    const loading = document.createElement("p");
+    loading.className = "muted loading-text";
+    loading.textContent = "Loading customers...";
+    customerList.appendChild(loading);
+
+    const { data, error } = await db
+        .from("customers")
+        .select("id, customer_number, customer_name, created_at, updated_at")
+        .order("customer_name", { ascending: true });
+
+    if (error) {
+        customerList.replaceChildren();
+        throw error;
+    }
+
+    customers = data || [];
+
+    customerCount.textContent = String(customers.length);
+
+    renderCustomerList();
+
+    if (selectedCustomerId) {
+        const stillExists = customers.some(
+            customer => customer.id === selectedCustomerId
         );
 
-        if (customer) selectCustomer(customer);
-      });
+        if (stillExists) {
+            await selectCustomer(selectedCustomerId);
+            return;
+        }
+    }
+
+    if (customers.length > 0) {
+        await selectCustomer(customers[0].id);
+    } else {
+        selectedCustomerId = null;
+        customerItems = [];
+        customerDetails.classList.add("hidden");
+        emptySelection.classList.remove("hidden");
+        itemsList.replaceChildren();
+    }
+}
+
+function renderCustomerList() {
+    customerList.replaceChildren();
+
+    const searchTerm = searchInput.value.trim().toLowerCase();
+
+    const filteredCustomers = customers.filter(customer => {
+        const name = (customer.customer_name || "").toLowerCase();
+        const number = (customer.customer_number || "").toLowerCase();
+
+        return name.includes(searchTerm) || number.includes(searchTerm);
+    });
+
+    if (filteredCustomers.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "muted list-empty";
+        empty.textContent = searchTerm
+            ? "No customers match your search."
+            : "No customers added yet.";
+
+        customerList.appendChild(empty);
+        return;
+    }
+
+    filteredCustomers.forEach(customer => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "customer-entry";
+
+        if (customer.id === selectedCustomerId) {
+            button.classList.add("active");
+        }
+
+        const avatar = document.createElement("span");
+        avatar.className = "customer-mini-avatar";
+        avatar.textContent = getInitial(customer.customer_name);
+
+        const textContainer = document.createElement("span");
+        textContainer.className = "customer-entry-text";
+
+        const name = document.createElement("strong");
+        name.textContent = customer.customer_name;
+
+        const number = document.createElement("span");
+        number.textContent = customer.customer_number;
+
+        textContainer.append(name, number);
+        button.append(avatar, textContainer);
+
+        button.addEventListener("click", async function () {
+            try {
+                hideNotice();
+                await selectCustomer(customer.id);
+            } catch (error) {
+                showNotice(
+                    "Could not load customer information: " +
+                    getErrorMessage(error),
+                    "error"
+                );
+            }
+        });
+
+        customerList.appendChild(button);
     });
 }
 
-// اختيار زبون وعرض ملفه
-async function selectCustomer(customer) {
-  state.selectedCustomer = customer;
+async function selectCustomer(customerId) {
+    const customer = customers.find(item => item.id === customerId);
 
-  $("emptySelection").classList.add("hidden");
-  $("customerDetails").classList.remove("hidden");
+    if (!customer) {
+        selectedCustomerId = null;
+        customerItems = [];
+        customerDetails.classList.add("hidden");
+        emptySelection.classList.remove("hidden");
+        return;
+    }
 
-  $("profileName").textContent = customer.customer_name;
-  $("profileNumber").textContent = customer.customer_number;
-  $("customerAvatar").textContent =
-    initials(customer.customer_name);
+    selectedCustomerId = customerId;
 
-  renderCustomers();
-  await loadItems(customer.id);
+    profileName.textContent = customer.customer_name;
+    profileNumber.textContent = customer.customer_number;
+    infoName.textContent = customer.customer_name;
+    infoNumber.textContent = customer.customer_number;
+    customerAvatar.textContent = getInitial(customer.customer_name);
+
+    emptySelection.classList.add("hidden");
+    customerDetails.classList.remove("hidden");
+
+    renderCustomerList();
+
+    await loadItems(customerId);
 }
 
-function clearSelection() {
-  state.selectedCustomer = null;
-  state.items = [];
+// ==========================================
+// 7. ADD / EDIT CUSTOMER
+// ==========================================
 
-  $("customerDetails").classList.add("hidden");
-  $("emptySelection").classList.remove("hidden");
-
-  renderCustomers();
-}
-
-// تحميل المعلومات الخاصة بزبون
-async function loadItems(customerId) {
-  $("itemsList").innerHTML =
-    '<p class="muted">جارٍ تحميل المعلومات...</p>';
-
-  const { data, error } = await db
-    .from("customer_items")
-    .select(`
-      id,
-      customer_id,
-      type,
-      text,
-      file_path,
-      original_file_name,
-      sort_order,
-      created_at
-    `)
-    .eq("customer_id", customerId)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    $("itemsList").innerHTML =
-      '<p class="muted">تعذّر تحميل المعلومات.</p>';
-
-    showNotice(
-      `خطأ في تحميل المعلومات: ${error.message}`,
-      "error"
-    );
-
-    return;
-  }
-
-  state.items = data || [];
-  renderItems();
-}
-
-// عرض معلومات الزبون
-function renderItems() {
-  if (!state.items.length) {
-    $("itemsList").innerHTML =
-      '<p class="muted">لا توجد معلومات بعد. أضف أول معلومة.</p>';
-    return;
-  }
-
-  $("itemsList").innerHTML = state.items.map((item) => `
-    <article class="item-card">
-      <div class="item-symbol">▤</div>
-
-      <div class="item-body">
-        <h4>${escapeHtml(item.type || "معلومة")}</h4>
-
-        <div class="item-date">
-          ${escapeHtml(formatDate(item.created_at))}
-        </div>
-
-        ${
-          item.text
-            ? `<p class="item-text">${escapeHtml(item.text)}</p>`
-            : ""
-        }
-
-        ${
-          item.file_path
-            ? `<p class="file-path">مسار الملف: ${escapeHtml(item.file_path)}</p>`
-            : ""
-        }
-
-        ${
-          item.original_file_name
-            ? `<p class="item-date">اسم الملف: ${escapeHtml(item.original_file_name)}</p>`
-            : ""
-        }
-      </div>
-
-      <div class="item-actions">
-        <button class="mini-btn" data-edit-item="${escapeHtml(item.id)}">
-          تعديل
-        </button>
-
-        <button class="mini-btn delete" data-delete-item="${escapeHtml(item.id)}">
-          حذف
-        </button>
-      </div>
-    </article>
-  `).join("");
-
-  document.querySelectorAll("[data-edit-item]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const item = state.items.find(
-        (i) => i.id === button.dataset.editItem
-      );
-
-      if (item) openItemDialog(item);
-    });
-  });
-
-  document.querySelectorAll("[data-delete-item]").forEach((button) => {
-    button.addEventListener("click", () => {
-      deleteItem(button.dataset.deleteItem);
-    });
-  });
-}
-
-// إضافة أو تعديل زبون
 function openCustomerDialog(customer = null) {
-  $("customerForm").reset();
-  showError("customerFormError");
+    editingCustomerId = customer ? customer.id : null;
 
-  $("customerId").value = customer?.id || "";
-  $("customerNumber").value = customer?.customer_number || "";
-  $("customerName").value = customer?.customer_name || "";
+    customerForm.reset();
+    setError(customerFormError);
 
-  $("customerDialogTitle").textContent =
-    customer ? "تعديل بيانات الزبون" : "إضافة زبون جديد";
+    customerDialogTitle.textContent = customer
+        ? "Edit Customer"
+        : "Add Customer";
 
-  $("customerDialog").showModal();
+    saveCustomerBtn.textContent = customer
+        ? "Save Changes"
+        : "Save Customer";
+
+    customerNameInput.value = customer
+        ? customer.customer_name
+        : "";
+
+    customerNumberInput.value = customer
+        ? customer.customer_number
+        : "";
+
+    customerDialog.showModal();
+    customerNameInput.focus();
 }
 
-async function saveCustomer(event) {
-  event.preventDefault();
-  showError("customerFormError");
-
-  const id = $("customerId").value;
-  const customer_number = $("customerNumber").value.trim();
-  const customer_name = $("customerName").value.trim();
-
-  if (!customer_number || !customer_name) {
-    return showError(
-      "customerFormError",
-      "يرجى إدخال رقم الزبون واسمه."
-    );
-  }
-
-  const now = new Date().toISOString();
-
-  let result;
-
-  if (id) {
-    result = await db
-      .from("customers")
-      .update({
-        customer_number,
-        customer_name,
-        updated_at: now
-      })
-      .eq("id", id)
-      .select()
-      .single();
-  } else {
-    result = await db
-      .from("customers")
-      .insert({
-        id: crypto.randomUUID(),
-        customer_number,
-        customer_name,
-        created_at: now,
-        updated_at: now
-      })
-      .select()
-      .single();
-  }
-
-  if (result.error) {
-    showError(
-      "customerFormError",
-      `لم يتم الحفظ: ${result.error.message}`
-    );
-    return;
-  }
-
-  $("customerDialog").close();
-
-  showNotice(id
-    ? "تم تحديث بيانات الزبون."
-    : "تمت إضافة الزبون بنجاح."
-  );
-
-  await loadCustomers(result.data.id);
+function closeCustomerDialog() {
+    customerDialog.close();
+    customerForm.reset();
+    setError(customerFormError);
+    editingCustomerId = null;
 }
 
-// إضافة أو تعديل معلومة
+document.getElementById("addCustomerBtn").addEventListener("click", function () {
+    openCustomerDialog();
+});
+
+document.getElementById("emptyAddCustomerBtn").addEventListener("click", function () {
+    openCustomerDialog();
+});
+
+document.getElementById("editCustomerBtn").addEventListener("click", function () {
+    const customer = customers.find(item => item.id === selectedCustomerId);
+
+    if (customer) {
+        openCustomerDialog(customer);
+    }
+});
+
+document.getElementById("closeCustomerDialog").addEventListener("click", closeCustomerDialog);
+document.getElementById("cancelCustomerBtn").addEventListener("click", closeCustomerDialog);
+
+customerForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const customerName = customerNameInput.value.trim();
+    const customerNumber = customerNumberInput.value.trim();
+
+    if (!customerName || !customerNumber) {
+        setError(customerFormError, "Please complete all required fields.");
+        return;
+    }
+
+    const originalText = editingCustomerId
+        ? "Save Changes"
+        : "Save Customer";
+
+    setButtonLoading(saveCustomerBtn, true, originalText);
+    setError(customerFormError);
+
+    try {
+        let result;
+
+        if (editingCustomerId) {
+            result = await db
+                .from("customers")
+                .update({
+                    customer_name: customerName,
+                    customer_number: customerNumber,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", editingCustomerId)
+                .select("id")
+                .maybeSingle();
+        } else {
+            result = await db
+                .from("customers")
+                .insert({
+                    id: crypto.randomUUID(),
+                    customer_name: customerName,
+                    customer_number: customerNumber,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select("id")
+                .single();
+        }
+
+        if (result.error) {
+            throw result.error;
+        }
+
+        if (!result.data) {
+            throw new Error(
+                "No customer was saved. Check your database permissions."
+            );
+        }
+
+        const savedId = result.data.id;
+        const wasEditing = Boolean(editingCustomerId);
+
+        closeCustomerDialog();
+
+        selectedCustomerId = savedId;
+
+        await loadCustomers();
+
+        showNotice(
+            wasEditing
+                ? "Customer updated successfully."
+                : "Customer added successfully.",
+            "success"
+        );
+    } catch (error) {
+        setError(customerFormError, getErrorMessage(error));
+    } finally {
+        setButtonLoading(saveCustomerBtn, false, originalText);
+    }
+});
+
+// ==========================================
+// 8. DELETE CUSTOMER
+// ==========================================
+
+document.getElementById("deleteCustomerBtn").addEventListener("click", async function () {
+    const customer = customers.find(item => item.id === selectedCustomerId);
+
+    if (!customer) {
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `Are you sure you want to delete "${customer.customer_name}"?\n\n` +
+        "All notes and information belonging to this customer will also be deleted."
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const button = document.getElementById("deleteCustomerBtn");
+    button.disabled = true;
+
+    try {
+        // Delete the customer's related items first.
+        const { error: itemsError } = await db
+            .from("customer_items")
+            .delete()
+            .eq("customer_id", customer.id);
+
+        if (itemsError) {
+            throw itemsError;
+        }
+
+        // Then delete the customer.
+        const { data, error } = await db
+            .from("customers")
+            .delete()
+            .eq("id", customer.id)
+            .select("id");
+
+        if (error) {
+            throw error;
+        }
+
+        if (!data || data.length === 0) {
+            throw new Error(
+                "The customer was not deleted. Check your database permissions."
+            );
+        }
+
+        selectedCustomerId = null;
+        customerItems = [];
+
+        await loadCustomers();
+
+        showNotice("Customer deleted successfully.", "success");
+    } catch (error) {
+        showNotice(
+            "Could not delete customer: " + getErrorMessage(error),
+            "error"
+        );
+    } finally {
+        button.disabled = false;
+    }
+});
+
+// ==========================================
+// 9. CUSTOMER NOTES / ITEMS
+// ==========================================
+
+async function loadItems(customerId) {
+    itemsList.replaceChildren();
+
+    const loading = document.createElement("p");
+    loading.className = "muted";
+    loading.textContent = "Loading information...";
+    itemsList.appendChild(loading);
+
+    const { data, error } = await db
+        .from("customer_items")
+        .select("id, customer_id, type, text, file_path, original_file_name, sort_order, created_at")
+        .eq("customer_id", customerId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        throw error;
+    }
+
+    customerItems = data || [];
+
+    renderItems();
+}
+
+function renderItems() {
+    itemsList.replaceChildren();
+
+    if (customerItems.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "muted list-empty";
+        empty.textContent = "No notes or information have been added for this customer yet.";
+        itemsList.appendChild(empty);
+        return;
+    }
+
+    customerItems.forEach(item => {
+        const card = document.createElement("article");
+        card.className = "item-card";
+
+        const header = document.createElement("div");
+        header.className = "item-card-header";
+
+        const type = document.createElement("span");
+        type.className = "item-type";
+        type.textContent = item.type || "Note";
+
+        const date = document.createElement("span");
+        date.className = "item-date";
+        date.textContent = formatDate(item.created_at);
+
+        header.append(type, date);
+
+        const text = document.createElement("p");
+        text.className = "item-text";
+        text.textContent = item.text || "";
+
+        card.append(header, text);
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "small-button";
+        editButton.textContent = "Edit";
+
+        editButton.addEventListener("click", function () {
+            openItemDialog(item);
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "small-button delete";
+        deleteButton.textContent = "Delete";
+
+        deleteButton.addEventListener("click", async function () {
+            await deleteItem(item);
+        });
+
+        actions.append(editButton, deleteButton);
+        card.appendChild(actions);
+
+        itemsList.appendChild(card);
+    });
+}
+
 function openItemDialog(item = null) {
-  if (!state.selectedCustomer) {
-    showNotice("اختر زبونًا أولًا.", "error");
-    return;
-  }
+    if (!selectedCustomerId) {
+        showNotice("Please select a customer first.", "error");
+        return;
+    }
 
-  $("itemForm").reset();
-  showError("itemFormError");
+    editingItemId = item ? item.id : null;
 
-  $("itemId").value = item?.id || "";
-  $("itemType").value = item?.type || "";
-  $("itemText").value = item?.text || "";
-  $("itemFilePath").value = item?.file_path || "";
-  $("itemOriginalFileName").value =
-    item?.original_file_name || "";
+    itemForm.reset();
+    setError(itemFormError);
 
-  $("itemDialogTitle").textContent =
-    item ? "تعديل المعلومة" : "إضافة معلومة";
+    itemDialogTitle.textContent = item ? "Edit Information" : "Add Note";
+    saveItemBtn.textContent = item ? "Save Changes" : "Save Information";
 
-  $("itemDialog").showModal();
+    itemTypeInput.value = item ? (item.type || "Note") : "Note";
+    itemTextInput.value = item ? (item.text || "") : "";
+
+    itemDialog.showModal();
+    itemTextInput.focus();
 }
 
-async function saveItem(event) {
-  event.preventDefault();
-  showError("itemFormError");
+function closeItemDialog() {
+    itemDialog.close();
+    itemForm.reset();
+    setError(itemFormError);
+    editingItemId = null;
+}
 
-  if (!state.selectedCustomer) {
-    return showError("itemFormError", "اختر زبونًا أولًا.");
-  }
+document.getElementById("addItemBtn").addEventListener("click", function () {
+    openItemDialog();
+});
 
-  const id = $("itemId").value;
-  const type = $("itemType").value.trim();
+document.getElementById("closeItemDialog").addEventListener("click", closeItemDialog);
+document.getElementById("cancelItemBtn").addEventListener("click", closeItemDialog);
 
-  if (!type) {
-    return showError(
-      "itemFormError",
-      "يرجى إدخال نوع المعلومة."
+itemForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    if (!selectedCustomerId) {
+        setError(itemFormError, "Please select a customer first.");
+        return;
+    }
+
+    const itemType = itemTypeInput.value;
+    const itemText = itemTextInput.value.trim();
+
+    if (!itemText) {
+        setError(itemFormError, "Please enter the details.");
+        return;
+    }
+
+    const originalText = editingItemId
+        ? "Save Changes"
+        : "Save Information";
+
+    setButtonLoading(saveItemBtn, true, originalText);
+    setError(itemFormError);
+
+    try {
+        let result;
+
+        if (editingItemId) {
+            result = await db
+                .from("customer_items")
+                .update({
+                    type: itemType,
+                    text: itemText
+                })
+                .eq("id", editingItemId)
+                .eq("customer_id", selectedCustomerId)
+                .select("id")
+                .maybeSingle();
+        } else {
+            const nextOrder = customerItems.length > 0
+                ? Math.max(...customerItems.map(item => Number(item.sort_order) || 0)) + 1
+                : 1;
+
+            result = await db
+                .from("customer_items")
+                .insert({
+                    id: crypto.randomUUID(),
+                    customer_id: selectedCustomerId,
+                    type: itemType,
+                    text: itemText,
+                    file_path: null,
+                    original_file_name: null,
+                    sort_order: nextOrder,
+                    created_at: new Date().toISOString()
+                })
+                .select("id")
+                .single();
+        }
+
+        if (result.error) {
+            throw result.error;
+        }
+
+        if (!result.data) {
+            throw new Error(
+                "The information was not saved. Check your database permissions."
+            );
+        }
+
+        const wasEditing = Boolean(editingItemId);
+
+        closeItemDialog();
+        await loadItems(selectedCustomerId);
+
+        showNotice(
+            wasEditing
+                ? "Information updated successfully."
+                : "Information added successfully.",
+            "success"
+        );
+    } catch (error) {
+        setError(itemFormError, getErrorMessage(error));
+    } finally {
+        setButtonLoading(saveItemBtn, false, originalText);
+    }
+});
+
+async function deleteItem(item) {
+    const confirmed = window.confirm(
+        "Are you sure you want to delete this information?"
     );
-  }
 
-  const payload = {
-    customer_id: state.selectedCustomer.id,
-    type,
-    text: $("itemText").value.trim() || null,
-    file_path: $("itemFilePath").value.trim() || null,
-    original_file_name:
-      $("itemOriginalFileName").value.trim() || null
-  };
+    if (!confirmed) {
+        return;
+    }
 
-  let result;
+    try {
+        const { data, error } = await db
+            .from("customer_items")
+            .delete()
+            .eq("id", item.id)
+            .eq("customer_id", selectedCustomerId)
+            .select("id");
 
-  if (id) {
-    result = await db
-      .from("customer_items")
-      .update(payload)
-      .eq("id", id)
-      .eq("customer_id", state.selectedCustomer.id)
-      .select()
-      .single();
-  } else {
-    const maxOrder = state.items.reduce(
-      (max, item) => Math.max(max, Number(item.sort_order) || 0),
-      0
-    );
+        if (error) {
+            throw error;
+        }
 
-    payload.id = crypto.randomUUID();
-    payload.created_at = new Date().toISOString();
-    payload.sort_order = maxOrder + 1;
+        if (!data || data.length === 0) {
+            throw new Error(
+                "The information was not deleted. Check your database permissions."
+            );
+        }
 
-    result = await db
-      .from("customer_items")
-      .insert(payload)
-      .select()
-      .single();
-  }
-
-  if (result.error) {
-    showError(
-      "itemFormError",
-      `لم يتم الحفظ: ${result.error.message}`
-    );
-    return;
-  }
-
-  $("itemDialog").close();
-
-  showNotice(id
-    ? "تم تحديث المعلومة."
-    : "تمت إضافة المعلومة."
-  );
-
-  await loadItems(state.selectedCustomer.id);
+        await loadItems(selectedCustomerId);
+        showNotice("Information deleted successfully.", "success");
+    } catch (error) {
+        showNotice(
+            "Could not delete information: " + getErrorMessage(error),
+            "error"
+        );
+    }
 }
 
-// حذف معلومة
-async function deleteItem(itemId) {
-  const item = state.items.find((i) => i.id === itemId);
+// ==========================================
+// 10. SEARCH
+// ==========================================
 
-  if (!item) return;
+searchInput.addEventListener("input", renderCustomerList);
 
-  if (!confirm(`هل تريد حذف المعلومة «${item.type}»؟`)) {
-    return;
-  }
+// ==========================================
+// 11. START APPLICATION
+// ==========================================
 
-  const { error } = await db
-    .from("customer_items")
-    .delete()
-    .eq("id", itemId)
-    .eq("customer_id", state.selectedCustomer.id);
+async function startApplication() {
+    if (sessionStorage.getItem(SESSION_KEY) !== "true") {
+        showLogin();
+        return;
+    }
 
-  if (error) {
-    showNotice(`تعذّر الحذف: ${error.message}`, "error");
-    return;
-  }
+    showApplication();
 
-  showNotice("تم حذف المعلومة.");
-  await loadItems(state.selectedCustomer.id);
+    try {
+        await loadCustomers();
+    } catch (error) {
+        showNotice(
+            "Could not load customers: " + getErrorMessage(error),
+            "error"
+        );
+    }
 }
 
-// حذف زبون ومعلوماته المرتبطة
-async function deleteSelectedCustomer() {
-  const customer = state.selectedCustomer;
-
-  if (!customer) return;
-
-  const confirmed = confirm(
-    `هل تريد حذف الزبون «${customer.customer_name}» وجميع معلوماته؟ لا يمكن التراجع عن ذلك.`
-  );
-
-  if (!confirmed) return;
-
-  const childResult = await db
-    .from("customer_items")
-    .delete()
-    .eq("customer_id", customer.id);
-
-  if (childResult.error) {
-    showNotice(
-      `تعذّر حذف معلومات الزبون: ${childResult.error.message}`,
-      "error"
-    );
-    return;
-  }
-
-  const { error } = await db
-    .from("customers")
-    .delete()
-    .eq("id", customer.id);
-
-  if (error) {
-    showNotice(`تعذّر حذف الزبون: ${error.message}`, "error");
-    return;
-  }
-
-  state.selectedCustomer = null;
-  showNotice("تم حذف الزبون ومعلوماته المرتبطة.");
-  await loadCustomers();
-}
-
-// ربط الأزرار بالنماذج
-$("searchInput").addEventListener("input", renderCustomers);
-
-$("newCustomerBtn").addEventListener("click", () => {
-  openCustomerDialog();
-});
-
-$("emptyNewCustomerBtn").addEventListener("click", () => {
-  openCustomerDialog();
-});
-
-$("editCustomerBtn").addEventListener("click", () => {
-  if (state.selectedCustomer) {
-    openCustomerDialog(state.selectedCustomer);
-  }
-});
-
-$("deleteCustomerBtn").addEventListener(
-  "click",
-  deleteSelectedCustomer
-);
-
-$("addItemBtn").addEventListener("click", () => {
-  openItemDialog();
-});
-
-$("customerForm").addEventListener("submit", saveCustomer);
-$("itemForm").addEventListener("submit", saveItem);
-
-document.querySelectorAll("[data-close]").forEach((button) => {
-  button.addEventListener("click", () => {
-    $(button.dataset.close).close();
-  });
-});
-
-// افتح الصفحة بعد تسجيل الدخول في الجلسة الحالية فقط
-if (sessionStorage.getItem("customerManagerLoggedIn") === "yes") {
-  showApp();
-}
+startApplication();

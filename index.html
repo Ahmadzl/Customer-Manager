@@ -1,181 +1,271 @@
 
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة الزبائن</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f4f7fb">
+    <title>Customer Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js" defer></script>
 </head>
 <body>
 
-  <section id="loginView" class="login-page">
-    <form id="loginForm" class="login-card">
-      <div class="logo">CM</div>
-      <p class="eyebrow">CUSTOMER MANAGER</p>
-      <h1>إدارة الزبائن</h1>
-      <p class="muted">سجّل الدخول للمتابعة</p>
+    <!-- Login -->
+    <section id="loginView" class="login-page">
+        <div class="login-card">
+            <div class="brand-icon">CM</div>
+            <h1>Customer Manager</h1>
+            <p class="muted">Sign in to manage your customers</p>
 
-      <label for="username">اسم المستخدم</label>
-      <input id="username" value="Admin" required autocomplete="username">
+            <form id="loginForm">
+                <label for="username">Username</label>
+                <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    placeholder="Enter your username"
+                    autocomplete="username"
+                    required
+                >
 
-      <label for="password">كلمة المرور</label>
-      <input id="password" type="password" required
-             autocomplete="current-password" placeholder="كلمة المرور">
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                >
 
-      <button class="btn primary full" type="submit">تسجيل الدخول</button>
-      <p id="loginError" class="error"></p>
-    </form>
-  </section>
+                <p id="loginError" class="error-message" role="alert"></p>
+                <button type="submit" class="primary-button full-width">
+                    Sign In
+                </button>
+            </form>
 
-  <main id="appView" class="app hidden">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo small">CM</div>
-        <div>
-          <strong>إدارة الزبائن</strong>
-          <span>Customer Manager</span>
+            <p class="login-footer">Customer information portal</p>
         </div>
-      </div>
-      <button id="logoutBtn" class="btn outline">تسجيل الخروج</button>
-    </header>
-
-    <section class="welcome">
-      <div>
-        <p class="eyebrow">CUSTOMER DATABASE</p>
-        <h1>ملفات الزبائن</h1>
-        <p class="muted">إدارة الزبائن ومعلوماتهم في مكان واحد.</p>
-      </div>
-      <div class="stat">
-        <span>إجمالي الزبائن</span>
-        <strong id="customerCount">0</strong>
-      </div>
     </section>
 
-    <div id="notice" class="notice hidden" role="status"></div>
-
-    <section class="workspace">
-      <aside class="panel customer-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>الزبائن</h2>
-            <p class="muted">ابحث واختر زبونًا</p>
-          </div>
-          <button id="newCustomerBtn" class="btn primary">+ زبون جديد</button>
-        </div>
-
-        <input id="searchInput" class="search"
-               placeholder="ابحث بالاسم أو رقم الزبون...">
-
-        <div id="customerList" class="customer-list">
-          <p class="muted">جارٍ تحميل الزبائن...</p>
-        </div>
-      </aside>
-
-      <section class="panel details-panel">
-        <div id="emptySelection" class="empty-state">
-          <div class="empty-icon">▤</div>
-          <h2>اختر زبونًا</h2>
-          <p class="muted">اختر زبونًا من القائمة لعرض معلوماته.</p>
-          <button id="emptyNewCustomerBtn" class="btn primary">
-            + إضافة زبون
-          </button>
-        </div>
-
-        <div id="customerDetails" class="hidden">
-          <div class="profile-header">
-            <div id="customerAvatar" class="avatar">ز</div>
-            <div class="profile-title">
-              <p class="eyebrow">CUSTOMER PROFILE</p>
-              <h2 id="profileName"></h2>
-              <p class="muted">
-                رقم الزبون:
-                <strong id="profileNumber"></strong>
-              </p>
+    <!-- Main application -->
+    <div id="appView" class="app hidden">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-icon small">CM</div>
+                <div>
+                    <h1>Customer Manager</h1>
+                    <p>Customer information portal</p>
+                </div>
             </div>
-            <div class="actions">
-              <button id="editCustomerBtn" class="btn outline">تعديل</button>
-              <button id="deleteCustomerBtn" class="btn danger">حذف الزبون</button>
+
+            <button id="logoutBtn" class="secondary-button">
+                Log Out
+            </button>
+        </header>
+
+        <main class="dashboard">
+            <section class="welcome-row">
+                <div>
+                    <h2>Customers</h2>
+                    <p class="muted">Manage your customer information in one place.</p>
+                </div>
+
+                <button id="addCustomerBtn" class="primary-button">
+                    <span aria-hidden="true">＋</span> Add Customer
+                </button>
+            </section>
+
+            <div id="notice" class="notice hidden" role="status"></div>
+
+            <section class="summary-card">
+                <div class="summary-icon" aria-hidden="true">👥</div>
+                <div>
+                    <p class="summary-label">Total Customers</p>
+                    <strong id="customerCount">0</strong>
+                </div>
+            </section>
+
+            <section class="workspace">
+                <aside class="customer-panel">
+                    <div class="panel-heading">
+                        <h3>Customer List</h3>
+                    </div>
+
+                    <div class="search-box">
+                        <span aria-hidden="true">⌕</span>
+                        <input
+                            id="searchInput"
+                            type="search"
+                            placeholder="Search by name or number..."
+                            aria-label="Search customers"
+                        >
+                    </div>
+
+                    <div id="customerList" class="customer-list">
+                        <p class="muted loading-text">Loading customers...</p>
+                    </div>
+                </aside>
+
+                <section class="details-panel">
+                    <div id="emptySelection" class="empty-state">
+                        <div class="empty-icon" aria-hidden="true">👤</div>
+                        <h3>No Customer Selected</h3>
+                        <p>Select a customer from the list to view their information.</p>
+                        <button id="emptyAddCustomerBtn" class="primary-button">
+                            Add Your First Customer
+                        </button>
+                    </div>
+
+                    <div id="customerDetails" class="hidden">
+                        <div class="profile-header">
+                            <div id="customerAvatar" class="avatar">C</div>
+
+                            <div class="profile-info">
+                                <h2 id="profileName">Customer Name</h2>
+                                <p>
+                                    Customer No.:
+                                    <strong id="profileNumber"></strong>
+                                </p>
+                            </div>
+
+                            <div class="profile-actions">
+                                <button id="editCustomerBtn" class="secondary-button">
+                                    Edit
+                                </button>
+                                <button id="deleteCustomerBtn" class="danger-button">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="section-heading">
+                            <div>
+                                <h3>Customer Information</h3>
+                                <p class="muted">Basic customer details</p>
+                            </div>
+                        </div>
+
+                        <div class="information-card">
+                            <div class="information-row">
+                                <span>Customer Name</span>
+                                <strong id="infoName"></strong>
+                            </div>
+                            <div class="information-row">
+                                <span>Customer Number</span>
+                                <strong id="infoNumber"></strong>
+                            </div>
+                        </div>
+
+                        <div class="section-heading items-heading">
+                            <div>
+                                <h3>Notes &amp; Items</h3>
+                                <p class="muted">Information saved for this customer</p>
+                            </div>
+
+                            <button id="addItemBtn" class="primary-button">
+                                + Add Note
+                            </button>
+                        </div>
+
+                        <div id="itemsList" class="items-list">
+                            <p class="muted">Loading information...</p>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <footer class="page-footer">
+                Customer Manager · Powered by Supabase
+            </footer>
+        </main>
+    </div>
+
+    <!-- Add/Edit Customer Dialog -->
+    <dialog id="customerDialog" class="app-dialog">
+        <form id="customerForm">
+            <div class="dialog-header">
+                <div>
+                    <h2 id="customerDialogTitle">Add Customer</h2>
+                    <p class="muted">Enter the customer details below.</p>
+                </div>
+                <button type="button" id="closeCustomerDialog"
+                        class="icon-button" aria-label="Close">×</button>
             </div>
-          </div>
 
-          <div class="section-heading">
-            <div>
-              <h3>معلومات الزبون</h3>
-              <p class="muted">أضف ملاحظات أو تفاصيل أو مسارات ملفات.</p>
+            <label for="customerNameInput">Customer Name *</label>
+            <input
+                id="customerNameInput"
+                type="text"
+                maxlength="200"
+                placeholder="Enter customer name"
+                required
+            >
+
+            <label for="customerNumberInput">Customer Number *</label>
+            <input
+                id="customerNumberInput"
+                type="text"
+                maxlength="100"
+                placeholder="e.g. CUST-001"
+                required
+            >
+
+            <p id="customerFormError" class="error-message" role="alert"></p>
+
+            <div class="dialog-actions">
+                <button type="button" id="cancelCustomerBtn" class="secondary-button">
+                    Cancel
+                </button>
+                <button type="submit" id="saveCustomerBtn" class="primary-button">
+                    Save Customer
+                </button>
             </div>
-            <button id="addItemBtn" class="btn primary">+ إضافة معلومة</button>
-          </div>
+        </form>
+    </dialog>
 
-          <div id="itemsList" class="items-list"></div>
-        </div>
-      </section>
-    </section>
+    <!-- Add/Edit Note Dialog -->
+    <dialog id="itemDialog" class="app-dialog">
+        <form id="itemForm">
+            <div class="dialog-header">
+                <div>
+                    <h2 id="itemDialogTitle">Add Note</h2>
+                    <p class="muted">Save information for the selected customer.</p>
+                </div>
+                <button type="button" id="closeItemDialog"
+                        class="icon-button" aria-label="Close">×</button>
+            </div>
 
-    <footer>Customer Manager · Supabase</footer>
-  </main>
+            <label for="itemTypeInput">Type</label>
+            <select id="itemTypeInput">
+                <option value="Note">Note</option>
+                <option value="Task">Task</option>
+                <option value="General Information">General Information</option>
+            </select>
 
-  <!-- نموذج إضافة وتعديل الزبون -->
-  <dialog id="customerDialog" class="modal">
-    <form id="customerForm">
-      <div class="modal-heading">
-        <h2 id="customerDialogTitle">إضافة زبون</h2>
-        <button type="button" class="close" data-close="customerDialog">×</button>
-      </div>
+            <label for="itemTextInput">Details *</label>
+            <textarea
+                id="itemTextInput"
+                rows="5"
+                maxlength="10000"
+                placeholder="Enter notes or customer information..."
+                required
+            ></textarea>
 
-      <input type="hidden" id="customerId">
+            <p id="itemFormError" class="error-message" role="alert"></p>
 
-      <label for="customerNumber">رقم الزبون</label>
-      <input id="customerNumber" required placeholder="مثال: C-1001">
-
-      <label for="customerName">اسم الزبون</label>
-      <input id="customerName" required placeholder="اسم الزبون">
-
-      <p id="customerFormError" class="error"></p>
-
-      <div class="modal-actions">
-        <button type="button" class="btn outline" data-close="customerDialog">إلغاء</button>
-        <button type="submit" class="btn primary">حفظ</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- نموذج إضافة وتعديل معلومات الزبون -->
-  <dialog id="itemDialog" class="modal">
-    <form id="itemForm">
-      <div class="modal-heading">
-        <h2 id="itemDialogTitle">إضافة معلومة</h2>
-        <button type="button" class="close" data-close="itemDialog">×</button>
-      </div>
-
-      <input type="hidden" id="itemId">
-
-      <label for="itemType">نوع المعلومة</label>
-      <input id="itemType" required placeholder="مثال: ملاحظة، عنوان، طلب">
-
-      <label for="itemText">التفاصيل</label>
-      <textarea id="itemText" rows="5" placeholder="اكتب المعلومات هنا..."></textarea>
-
-      <label for="itemFilePath">مسار الملف أو رابطه (اختياري)</label>
-      <input id="itemFilePath" placeholder="documents/file.pdf">
-
-      <label for="itemOriginalFileName">اسم الملف (اختياري)</label>
-      <input id="itemOriginalFileName" placeholder="file.pdf">
-
-      <p class="muted small-note">
-        هذه الحقول تحفظ مسار الملف واسمه فقط، ولا ترفع الملفات فعليًا.
-      </p>
-
-      <p id="itemFormError" class="error"></p>
-
-      <div class="modal-actions">
-        <button type="button" class="btn outline" data-close="itemDialog">إلغاء</button>
-        <button type="submit" class="btn primary">حفظ المعلومة</button>
-      </div>
-    </form>
-  </dialog>
+            <div class="dialog-actions">
+                <button type="button" id="cancelItemBtn" class="secondary-button">
+                    Cancel
+                </button>
+                <button type="submit" id="saveItemBtn" class="primary-button">
+                    Save Information
+                </button>
+            </div>
+        </form>
+    </dialog>
 
 </body>
 </html>
