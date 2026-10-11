@@ -1,310 +1,301 @@
 
 "use strict";
 
-// ==========================================
-// 1. SUPABASE CONFIGURATION
-// ==========================================
+/* =========================================
+   1. CONFIGURATION
+========================================= */
 
-const SUPABASE_URL =
-    "https://sxbkjoxmujohptobmqwz.supabase.co";
-
-const SUPABASE_PUBLISHABLE_KEY =
-    "sb_publishable_ffkDrUOb1jg09hzn4Bp0Nw_siCRHeYF";
+const SUPABASE_URL = "https://sxbkjoxmujohptobmqwz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ffkDrUOb1jg09hzn4Bp0Nw_siCRHeYF";
 
 const APP_USERNAME = "Admin";
 const APP_PASSWORD = "Venture.321";
 const SESSION_KEY = "customer_manager_logged_in";
 
-const db = window.supabase.createClient(
+const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY
+    SUPABASE_KEY
 );
 
-// ==========================================
-// 2. APPLICATION STATE
-// ==========================================
+/* =========================================
+   2. APPLICATION STATE
+========================================= */
 
 let customers = [];
 let selectedCustomerId = null;
 let customerItems = [];
 let editingCustomerId = null;
 let editingItemId = null;
+let isLoading = false;
 
-// ==========================================
-// 3. DOM ELEMENTS
-// ==========================================
+/* =========================================
+   3. DOM HELPERS
+========================================= */
 
-const loginView = document.getElementById("loginView");
-const appView = document.getElementById("appView");
-const loginForm = document.getElementById("loginForm");
-const usernameInput = document.getElementById("username");
-const passwordInput = document.getElementById("password");
-const loginError = document.getElementById("loginError");
-const logoutBtn = document.getElementById("logoutBtn");
-
-const customerCount = document.getElementById("customerCount");
-const notice = document.getElementById("notice");
-const searchInput = document.getElementById("searchInput");
-const customerList = document.getElementById("customerList");
-
-const emptySelection = document.getElementById("emptySelection");
-const customerDetails = document.getElementById("customerDetails");
-
-const profileName = document.getElementById("profileName");
-const profileNumber = document.getElementById("profileNumber");
-const customerAvatar = document.getElementById("customerAvatar");
-const infoName = document.getElementById("infoName");
-const infoNumber = document.getElementById("infoNumber");
-const itemsList = document.getElementById("itemsList");
-
-const customerDialog = document.getElementById("customerDialog");
-const customerForm = document.getElementById("customerForm");
-const customerDialogTitle = document.getElementById("customerDialogTitle");
-const customerNameInput = document.getElementById("customerNameInput");
-const customerNumberInput = document.getElementById("customerNumberInput");
-const customerFormError = document.getElementById("customerFormError");
-const saveCustomerBtn = document.getElementById("saveCustomerBtn");
-
-const itemDialog = document.getElementById("itemDialog");
-const itemForm = document.getElementById("itemForm");
-const itemDialogTitle = document.getElementById("itemDialogTitle");
-const itemTypeInput = document.getElementById("itemTypeInput");
-const itemTextInput = document.getElementById("itemTextInput");
-const itemFormError = document.getElementById("itemFormError");
-const saveItemBtn = document.getElementById("saveItemBtn");
-
-// ==========================================
-// 4. GENERAL HELPERS
-// ==========================================
-
-function showNotice(message, type = "success") {
-    notice.textContent = message;
-    notice.className = `notice ${type}`;
+function $(id) {
+    return document.getElementById(id);
 }
 
-function hideNotice() {
-    notice.textContent = "";
-    notice.className = "notice hidden";
-}
+function showStatus(message, type = "") {
+    const element = $("statusMessage");
 
-function setError(element, message = "") {
+    if (!element) return;
+
     element.textContent = message;
+    element.className = "status-message";
+
+    if (type) {
+        element.classList.add(type);
+    }
+}
+
+function setError(id, message = "") {
+    const element = $(id);
+
+    if (element) {
+        element.textContent = message;
+    }
+}
+
+function setButtonLoading(buttonId, loading, loadingText = "Saving...") {
+    const button = $(buttonId);
+
+    if (!button) return;
+
+    if (loading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = loadingText;
+        button.disabled = true;
+    } else {
+        button.textContent =
+            button.dataset.originalText || button.textContent;
+        button.disabled = false;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+    })[character]);
 }
 
 function formatDate(value) {
-    if (!value) return "";
+    if (!value) return "—";
 
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) return "";
+    if (Number.isNaN(date.getTime())) {
+        return "—";
+    }
 
-    return new Intl.DateTimeFormat("en", {
-        dateStyle: "medium",
-        timeStyle: "short"
-    }).format(date);
+    return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
 }
 
-function getInitial(name) {
-    return (name || "C").trim().charAt(0).toUpperCase() || "C";
+function makeId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+
+    throw new Error(
+        "Your browser does not support secure ID generation. Please use an updated browser."
+    );
 }
 
 function getErrorMessage(error) {
     if (!error) {
-        return "An unexpected error occurred.";
+        return "An unknown error occurred.";
     }
 
-    if (error.code === "23505") {
+    const message = error.message || String(error);
+    const code = error.code || "";
+
+    if (code === "23505") {
         return "This customer number already exists. Please use a different number.";
     }
 
-    if (error.code === "23503") {
-        return "This record is linked to other information and could not be changed.";
+    if (code === "23503") {
+        return "The related customer record could not be found.";
     }
 
-    if (error.code === "23514") {
-        return "The information does not match the database rules. Please check the item type and content.";
+    if (code === "23514") {
+        return "The data does not match the database rules. Please check the note information.";
     }
 
-    if (error.code === "42501" || error.code === "PGRST301") {
-        return "Database access was denied. Check your Supabase permissions and RLS policies.";
+    if (code === "42501" || code === "PGRST301") {
+        return "Access denied. Check your Supabase Row Level Security policies.";
     }
 
-    return error.message || "An unexpected error occurred. Please try again.";
+    if (
+        message.toLowerCase().includes("failed to fetch") ||
+        message.toLowerCase().includes("network")
+    ) {
+        return "Could not connect to Supabase. Check your internet connection and project settings.";
+    }
+
+    return message;
 }
 
-function setButtonLoading(button, loading, normalText) {
-    button.disabled = loading;
-    button.textContent = loading ? "Please wait..." : normalText;
-}
-
-// ==========================================
-// 5. LOGIN AND LOGOUT
-// ==========================================
-
-function showLogin() {
-    loginView.classList.remove("hidden");
-    appView.classList.add("hidden");
-}
+/* =========================================
+   4. LOGIN AND LOGOUT
+========================================= */
 
 function showApplication() {
-    loginView.classList.add("hidden");
-    appView.classList.remove("hidden");
+    $("loginView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
 }
 
-loginForm.addEventListener("submit", async function (event) {
+function showLogin() {
+    $("appView").classList.add("hidden");
+    $("loginView").classList.remove("hidden");
+}
+
+async function handleLogin(event) {
     event.preventDefault();
 
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
+    const username = $("username").value.trim();
+    const password = $("password").value;
 
-    if (username !== APP_USERNAME || password !== APP_PASSWORD) {
-        setError(loginError, "Incorrect username or password.");
-        passwordInput.select();
-        return;
-    }
+    setError("loginError", "");
 
-    sessionStorage.setItem(SESSION_KEY, "true");
-    setError(loginError);
-    passwordInput.value = "";
+    if (username === APP_USERNAME && password === APP_PASSWORD) {
+        sessionStorage.setItem(SESSION_KEY, "true");
 
-    showApplication();
-    hideNotice();
+        showApplication();
+        $("password").value = "";
 
-    try {
         await loadCustomers();
-    } catch (error) {
-        showNotice(
-            "Could not load customers: " + getErrorMessage(error),
-            "error"
-        );
-    }
-});
-
-logoutBtn.addEventListener("click", function () {
-    sessionStorage.removeItem(SESSION_KEY);
-
-    customers = [];
-    customerItems = [];
-    selectedCustomerId = null;
-
-    customerList.replaceChildren();
-    itemsList.replaceChildren();
-
-    showLogin();
-    hideNotice();
-    loginForm.reset();
-});
-
-// ==========================================
-// 6. LOAD AND DISPLAY CUSTOMERS
-// ==========================================
-
-async function loadCustomers() {
-    customerList.replaceChildren();
-
-    const loading = document.createElement("p");
-    loading.className = "muted loading-text";
-    loading.textContent = "Loading customers...";
-    customerList.appendChild(loading);
-
-    const { data, error } = await db
-        .from("customers")
-        .select("id, customer_number, customer_name, created_at, updated_at")
-        .order("customer_name", { ascending: true });
-
-    if (error) throw error;
-
-    customers = data || [];
-    customerCount.textContent = String(customers.length);
-
-    renderCustomerList();
-
-    if (selectedCustomerId) {
-        const exists = customers.some(
-            customer => customer.id === selectedCustomerId
-        );
-
-        if (exists) {
-            await selectCustomer(selectedCustomerId);
-            return;
-        }
-    }
-
-    if (customers.length > 0) {
-        await selectCustomer(customers[0].id);
     } else {
-        selectedCustomerId = null;
-        customerItems = [];
-        customerDetails.classList.add("hidden");
-        emptySelection.classList.remove("hidden");
-        itemsList.replaceChildren();
+        setError("loginError", "Incorrect username or password.");
+        $("password").value = "";
+        $("password").focus();
     }
 }
 
-function renderCustomerList() {
-    customerList.replaceChildren();
+function handleLogout() {
+    sessionStorage.removeItem(SESSION_KEY);
 
-    const searchTerm = searchInput.value.trim().toLowerCase();
+    selectedCustomerId = null;
+    customers = [];
+    customerItems = [];
 
-    const filtered = customers.filter(customer => {
-        const name = (customer.customer_name || "").toLowerCase();
-        const number = (customer.customer_number || "").toLowerCase();
+    $("loginForm").reset();
 
-        return name.includes(searchTerm) || number.includes(searchTerm);
-    });
+    showLogin();
+    setError("loginError", "");
+}
 
-    if (filtered.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "muted list-empty";
-        empty.textContent = searchTerm
-            ? "No customers match your search."
-            : "No customers added yet.";
+/* =========================================
+   5. LOAD CUSTOMERS
+========================================= */
 
-        customerList.appendChild(empty);
+async function loadCustomers() {
+    if (isLoading) return;
+
+    isLoading = true;
+    showStatus("Loading customers...");
+
+    try {
+        const { data, error } = await supabaseClient
+            .from("customers")
+            .select("*")
+            .order("customer_name", { ascending: true });
+
+        if (error) throw error;
+
+        customers = data || [];
+
+        if (
+            selectedCustomerId &&
+            !customers.some(customer => customer.id === selectedCustomerId)
+        ) {
+            selectedCustomerId = null;
+        }
+
+        renderCustomers();
+
+        if (selectedCustomerId) {
+            await selectCustomer(selectedCustomerId);
+        } else if (customers.length > 0) {
+            await selectCustomer(customers[0].id);
+        } else {
+            renderEmptyDetails();
+        }
+
+        showStatus(
+            `Loaded ${customers.length} customer(s).`,
+            "success"
+        );
+    } catch (error) {
+        console.error("Load customers error:", error);
+        showStatus(getErrorMessage(error), "error");
+        renderCustomers();
+    } finally {
+        isLoading = false;
+    }
+}
+
+function getFilteredCustomers() {
+    const query = $("customerSearch").value.trim().toLowerCase();
+
+    if (!query) return customers;
+
+    return customers.filter(customer =>
+        String(customer.customer_number || "").toLowerCase().includes(query) ||
+        String(customer.customer_name || "").toLowerCase().includes(query)
+    );
+}
+
+function renderCustomers() {
+    const list = $("customerList");
+    const filteredCustomers = getFilteredCustomers();
+
+    $("customerCount").textContent = String(customers.length);
+
+    if (filteredCustomers.length === 0) {
+        list.innerHTML = `
+            <p class="empty-state">
+                ${customers.length === 0
+                    ? "No customers found. Add your first customer."
+                    : "No customers match your search."}
+            </p>
+        `;
         return;
     }
 
-    filtered.forEach(customer => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "customer-entry";
+    list.innerHTML = filteredCustomers.map(customer => `
+        <button
+            type="button"
+            class="customer-entry ${
+                customer.id === selectedCustomerId ? "active" : ""
+            }"
+            data-customer-id="${escapeHtml(customer.id)}"
+        >
+            <strong>${escapeHtml(customer.customer_name)}</strong>
+            <span>Customer #${escapeHtml(customer.customer_number)}</span>
+        </button>
+    `).join("");
+}
 
-        if (customer.id === selectedCustomerId) {
-            button.classList.add("active");
-        }
+/* =========================================
+   6. CUSTOMER DETAILS AND NOTES
+========================================= */
 
-        const avatar = document.createElement("span");
-        avatar.className = "customer-mini-avatar";
-        avatar.textContent = getInitial(customer.customer_name);
+function renderEmptyDetails() {
+    $("customerDetails").classList.add("hidden");
+    $("emptyDetails").classList.remove("hidden");
 
-        const textContainer = document.createElement("span");
-        textContainer.className = "customer-entry-text";
-
-        const name = document.createElement("strong");
-        name.textContent = customer.customer_name;
-
-        const number = document.createElement("span");
-        number.textContent = customer.customer_number;
-
-        textContainer.append(name, number);
-        button.append(avatar, textContainer);
-
-        button.addEventListener("click", async function () {
-            hideNotice();
-
-            try {
-                await selectCustomer(customer.id);
-            } catch (error) {
-                showNotice(
-                    "Could not load customer information: " +
-                    getErrorMessage(error),
-                    "error"
-                );
-            }
-        });
-
-        customerList.appendChild(button);
-    });
+    $("notesList").innerHTML =
+        '<p class="empty-state">Select a customer to view notes.</p>';
 }
 
 async function selectCustomer(customerId) {
@@ -312,491 +303,579 @@ async function selectCustomer(customerId) {
 
     if (!customer) {
         selectedCustomerId = null;
-        customerItems = [];
-        customerDetails.classList.add("hidden");
-        emptySelection.classList.remove("hidden");
+        renderEmptyDetails();
+        renderCustomers();
         return;
     }
 
     selectedCustomerId = customerId;
 
-    profileName.textContent = customer.customer_name;
-    profileNumber.textContent = customer.customer_number;
-    infoName.textContent = customer.customer_name;
-    infoNumber.textContent = customer.customer_number;
-    customerAvatar.textContent = getInitial(customer.customer_name);
+    renderCustomers();
 
-    emptySelection.classList.add("hidden");
-    customerDetails.classList.remove("hidden");
+    $("emptyDetails").classList.add("hidden");
+    $("customerDetails").classList.remove("hidden");
 
-    renderCustomerList();
-    await loadItems(customerId);
+    $("detailCustomerName").textContent = customer.customer_name;
+    $("detailCustomerNumber").textContent =
+        `Customer #${customer.customer_number}`;
+    $("detailNumberValue").textContent = customer.customer_number;
+    $("detailCreatedAt").textContent = formatDate(customer.created_at);
+
+    await loadCustomerItems(customerId);
 }
 
-// ==========================================
-// 7. ADD AND EDIT CUSTOMERS
-// ==========================================
+async function loadCustomerItems(customerId) {
+    $("notesList").innerHTML =
+        '<p class="empty-state">Loading notes...</p>';
+
+    try {
+        const { data, error } = await supabaseClient
+            .from("customer_items")
+            .select("*")
+            .eq("customer_id", customerId)
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        customerItems = data || [];
+        renderItems();
+    } catch (error) {
+        console.error("Load notes error:", error);
+
+        $("notesList").innerHTML = `
+            <p class="empty-state">
+                ${escapeHtml(getErrorMessage(error))}
+            </p>
+        `;
+    }
+}
+
+/* =========================================
+   7. SAFE RICH TEXT NOTES
+========================================= */
+
+function sanitizeNoteHtml(html) {
+    if (!window.DOMPurify) {
+        throw new Error(
+            "The text editor security library did not load. Refresh the page and try again."
+        );
+    }
+
+    return window.DOMPurify.sanitize(String(html ?? ""), {
+        ALLOWED_TAGS: [
+            "p", "br", "div", "span",
+            "b", "strong", "i", "em", "u",
+            "ol", "ul", "li",
+            "h1", "h2", "h3",
+            "font"
+        ],
+        ALLOWED_ATTR: ["style", "size"],
+        ALLOW_DATA_ATTR: false
+    });
+}
+
+function looksLikeHtml(value) {
+    return /<\/?[a-z][\s\S]*?>/i.test(String(value ?? ""));
+}
+
+function getSafeNoteHtml(value) {
+    const text = String(value ?? "");
+
+    if (looksLikeHtml(text)) {
+        return sanitizeNoteHtml(text);
+    }
+
+    return escapeHtml(text).replace(/\r?\n/g, "<br>");
+}
+
+function renderItems() {
+    const list = $("notesList");
+
+    if (!customerItems.length) {
+        list.innerHTML = `
+            <p class="empty-state">
+                No notes yet. Click "Add Note" to create one.
+            </p>
+        `;
+        return;
+    }
+
+    list.innerHTML = customerItems.map(item => `
+        <article class="note-card">
+            <div class="note-card-header">
+                <span class="note-date">
+                    ${escapeHtml(formatDate(item.created_at))}
+                </span>
+
+                <div class="note-actions">
+                    <button
+                        type="button"
+                        class="secondary-button"
+                        data-edit-item="${escapeHtml(item.id)}"
+                    >Edit</button>
+
+                    <button
+                        type="button"
+                        class="danger-button"
+                        data-delete-item="${escapeHtml(item.id)}"
+                    >Delete</button>
+                </div>
+            </div>
+
+            <div class="note-content">
+                ${getSafeNoteHtml(item.text)}
+            </div>
+        </article>
+    `).join("");
+}
+
+/* =========================================
+   8. ADD AND EDIT CUSTOMER
+========================================= */
 
 function openCustomerDialog(customer = null) {
     editingCustomerId = customer ? customer.id : null;
 
-    customerForm.reset();
-    setError(customerFormError);
+    $("customerForm").reset();
+    setError("customerFormError", "");
 
-    customerDialogTitle.textContent = customer
-        ? "Edit Customer"
-        : "Add Customer";
+    $("customerDialogTitle").textContent =
+        customer ? "Edit Customer" : "Add Customer";
 
-    saveCustomerBtn.textContent = customer
-        ? "Save Changes"
-        : "Save Customer";
+    $("saveCustomerButton").textContent =
+        customer ? "Save Changes" : "Save Customer";
 
-    customerNameInput.value = customer ? customer.customer_name : "";
-    customerNumberInput.value = customer ? customer.customer_number : "";
+    $("customerNumberInput").value =
+        customer ? customer.customer_number : "";
 
-    customerDialog.showModal();
-    customerNameInput.focus();
+    $("customerNameInput").value =
+        customer ? customer.customer_name : "";
+
+    $("customerDialog").showModal();
+    $("customerNumberInput").focus();
 }
 
-function closeCustomerDialog() {
-    if (customerDialog.open) customerDialog.close();
-
-    customerForm.reset();
-    setError(customerFormError);
-    editingCustomerId = null;
-}
-
-document.getElementById("addCustomerBtn").addEventListener("click", function () {
-    openCustomerDialog();
-});
-
-document.getElementById("emptyAddCustomerBtn").addEventListener("click", function () {
-    openCustomerDialog();
-});
-
-document.getElementById("editCustomerBtn").addEventListener("click", function () {
-    const customer = customers.find(item => item.id === selectedCustomerId);
-
-    if (customer) openCustomerDialog(customer);
-});
-
-document.getElementById("closeCustomerDialog")
-    .addEventListener("click", closeCustomerDialog);
-
-document.getElementById("cancelCustomerBtn")
-    .addEventListener("click", closeCustomerDialog);
-
-customerForm.addEventListener("submit", async function (event) {
+async function handleCustomerSave(event) {
     event.preventDefault();
 
-    const customerName = customerNameInput.value.trim();
-    const customerNumber = customerNumberInput.value.trim();
+    const customerNumber = $("customerNumberInput").value.trim();
+    const customerName = $("customerNameInput").value.trim();
 
-    if (!customerName || !customerNumber) {
-        setError(customerFormError, "Please complete all required fields.");
+    setError("customerFormError", "");
+
+    if (!customerNumber || !customerName) {
+        setError("customerFormError", "Please fill in both fields.");
         return;
     }
 
-    const wasEditing = Boolean(editingCustomerId);
-    const originalText = wasEditing ? "Save Changes" : "Save Customer";
-
-    setButtonLoading(saveCustomerBtn, true, originalText);
-    setError(customerFormError);
+    setButtonLoading("saveCustomerButton", true);
 
     try {
-        let result;
+        const now = new Date().toISOString();
 
-        if (wasEditing) {
-            result = await db
+        if (editingCustomerId) {
+            const { data, error } = await supabaseClient
                 .from("customers")
                 .update({
-                    customer_name: customerName,
                     customer_number: customerNumber,
-                    updated_at: new Date().toISOString()
+                    customer_name: customerName,
+                    updated_at: now
                 })
                 .eq("id", editingCustomerId)
-                .select("id")
+                .select()
                 .maybeSingle();
+
+            if (error) throw error;
+
+            if (!data) {
+                throw new Error(
+                    "Customer was not updated. Check your Supabase permissions."
+                );
+            }
+
+            selectedCustomerId = data.id;
         } else {
-            result = await db
+            const { data, error } = await supabaseClient
                 .from("customers")
                 .insert({
-                    id: crypto.randomUUID(),
-                    customer_name: customerName,
+                    id: makeId(),
                     customer_number: customerNumber,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    customer_name: customerName,
+                    created_at: now,
+                    updated_at: now
                 })
-                .select("id")
+                .select()
                 .single();
+
+            if (error) throw error;
+
+            selectedCustomerId = data.id;
         }
 
-        if (result.error) throw result.error;
+        $("customerDialog").close();
 
-        if (!result.data) {
-            throw new Error(
-                "No customer was saved. Check your database permissions."
-            );
-        }
-
-        selectedCustomerId = result.data.id;
-
-        closeCustomerDialog();
         await loadCustomers();
 
-        showNotice(
-            wasEditing
-                ? "Customer updated successfully."
-                : "Customer added successfully.",
+        showStatus(
+            editingCustomerId ? "Customer updated successfully." : "Customer added successfully.",
             "success"
         );
     } catch (error) {
-        setError(customerFormError, getErrorMessage(error));
+        console.error("Save customer error:", error);
+        setError("customerFormError", getErrorMessage(error));
     } finally {
-        setButtonLoading(saveCustomerBtn, false, originalText);
+        setButtonLoading("saveCustomerButton", false);
     }
-});
+}
 
-// ==========================================
-// 8. DELETE CUSTOMERS
-// ==========================================
-
-document.getElementById("deleteCustomerBtn").addEventListener("click", async function () {
-    const customer = customers.find(item => item.id === selectedCustomerId);
+async function deleteSelectedCustomer() {
+    const customer = customers.find(
+        item => item.id === selectedCustomerId
+    );
 
     if (!customer) return;
 
     const confirmed = window.confirm(
-        `Are you sure you want to delete "${customer.customer_name}"?\n\n` +
-        "All notes belonging to this customer will also be deleted."
+        `Delete "${customer.customer_name}" and all its notes? This cannot be undone.`
     );
 
     if (!confirmed) return;
 
-    const button = document.getElementById("deleteCustomerBtn");
-    button.disabled = true;
-
     try {
-        const { error: itemsError } = await db
+        showStatus("Deleting customer...");
+
+        const { error: itemsError } = await supabaseClient
             .from("customer_items")
             .delete()
             .eq("customer_id", customer.id);
 
         if (itemsError) throw itemsError;
 
-        const { data, error } = await db
+        const { error: customerError } = await supabaseClient
             .from("customers")
             .delete()
-            .eq("id", customer.id)
-            .select("id");
+            .eq("id", customer.id);
 
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-            throw new Error(
-                "The customer was not deleted. Check your database permissions."
-            );
-        }
+        if (customerError) throw customerError;
 
         selectedCustomerId = null;
-        customerItems = [];
 
         await loadCustomers();
-        showNotice("Customer deleted successfully.", "success");
+
+        showStatus("Customer deleted successfully.", "success");
     } catch (error) {
-        showNotice(
-            "Could not delete customer: " + getErrorMessage(error),
-            "error"
-        );
-    } finally {
-        button.disabled = false;
+        console.error("Delete customer error:", error);
+        showStatus(getErrorMessage(error), "error");
     }
-});
-
-// ==========================================
-// 9. LOAD AND DISPLAY CUSTOMER NOTES
-// ==========================================
-
-async function loadItems(customerId) {
-    itemsList.replaceChildren();
-
-    const loading = document.createElement("p");
-    loading.className = "muted";
-    loading.textContent = "Loading information...";
-    itemsList.appendChild(loading);
-
-    const { data, error } = await db
-        .from("customer_items")
-        .select(
-            "id, customer_id, type, text, file_path, original_file_name, sort_order, created_at"
-        )
-        .eq("customer_id", customerId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    customerItems = data || [];
-    renderItems();
 }
 
-function renderItems() {
-    itemsList.replaceChildren();
-
-    if (customerItems.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "muted list-empty";
-        empty.textContent =
-            "No notes or information have been added for this customer yet.";
-
-        itemsList.appendChild(empty);
-        return;
-    }
-
-    customerItems.forEach(item => {
-        const card = document.createElement("article");
-        card.className = "item-card";
-
-        const header = document.createElement("div");
-        header.className = "item-card-header";
-
-        const type = document.createElement("span");
-        type.className = "item-type";
-        type.textContent = item.type || "Text";
-
-        const date = document.createElement("span");
-        date.className = "item-date";
-        date.textContent = formatDate(item.created_at);
-
-        header.append(type, date);
-
-        const text = document.createElement("p");
-        text.className = "item-text";
-        text.textContent = item.text || "";
-
-        card.append(header, text);
-
-        const actions = document.createElement("div");
-        actions.className = "item-actions";
-
-        const editButton = document.createElement("button");
-        editButton.type = "button";
-        editButton.className = "small-button";
-        editButton.textContent = "Edit";
-        editButton.addEventListener("click", function () {
-            openItemDialog(item);
-        });
-
-        const deleteButton = document.createElement("button");
-        deleteButton.type = "button";
-        deleteButton.className = "small-button delete";
-        deleteButton.textContent = "Delete";
-        deleteButton.addEventListener("click", function () {
-            deleteItem(item);
-        });
-
-        actions.append(editButton, deleteButton);
-        card.appendChild(actions);
-        itemsList.appendChild(card);
-    });
-}
-
-// ==========================================
-// 10. ADD AND EDIT NOTES
-// ==========================================
+/* =========================================
+   9. ADD AND EDIT NOTES
+========================================= */
 
 function openItemDialog(item = null) {
     if (!selectedCustomerId) {
-        showNotice("Please select a customer first.", "error");
+        showStatus("Please select a customer first.", "error");
         return;
     }
 
     editingItemId = item ? item.id : null;
 
-    itemForm.reset();
-    setError(itemFormError);
+    $("itemForm").reset();
+    setError("itemFormError", "");
 
-    itemDialogTitle.textContent = item ? "Edit Information" : "Add Note";
-    saveItemBtn.textContent = item ? "Save Changes" : "Save Information";
+    $("itemDialogTitle").textContent =
+        item ? "Edit Note" : "Add Note";
 
-    // The existing database constraint accepts "Text" for text notes.
-    itemTypeInput.value = "Text";
-    itemTextInput.value = item ? (item.text || "") : "";
+    $("saveNoteButton").textContent =
+        item ? "Save Changes" : "Save Note";
 
-    itemDialog.showModal();
-    itemTextInput.focus();
+    $("itemTextInput").innerHTML =
+        item ? getSafeNoteHtml(item.text) : "";
+
+    $("itemDialog").showModal();
+    $("itemTextInput").focus();
 }
 
-function closeItemDialog() {
-    if (itemDialog.open) itemDialog.close();
-
-    itemForm.reset();
-    setError(itemFormError);
-    editingItemId = null;
-}
-
-document.getElementById("addItemBtn").addEventListener("click", function () {
-    openItemDialog();
-});
-
-document.getElementById("closeItemDialog")
-    .addEventListener("click", closeItemDialog);
-
-document.getElementById("cancelItemBtn")
-    .addEventListener("click", closeItemDialog);
-
-itemForm.addEventListener("submit", async function (event) {
+async function handleItemSave(event) {
     event.preventDefault();
 
-    if (!selectedCustomerId) {
-        setError(itemFormError, "Please select a customer first.");
+    setError("itemFormError", "");
+
+    const rawHtml = $("itemTextInput").innerHTML.trim();
+
+    if (
+        !$("itemTextInput").textContent.trim() &&
+        !$("itemTextInput").querySelector("img")
+    ) {
+        setError("itemFormError", "Please enter a note before saving.");
         return;
     }
 
-    const itemText = itemTextInput.value.trim();
-
-    if (!itemText) {
-        setError(itemFormError, "Please enter the details.");
-        return;
-    }
-
-    const wasEditing = Boolean(editingItemId);
-    const originalText = wasEditing ? "Save Changes" : "Save Information";
-
-    setButtonLoading(saveItemBtn, true, originalText);
-    setError(itemFormError);
+    let noteHtml;
 
     try {
-        let result;
+        noteHtml = sanitizeNoteHtml(rawHtml);
+    } catch (error) {
+        setError("itemFormError", getErrorMessage(error));
+        return;
+    }
 
-        if (wasEditing) {
-            // Keep the existing record as a text item.
-            result = await db
+    setButtonLoading("saveNoteButton", true);
+
+    try {
+        const now = new Date().toISOString();
+
+        if (editingItemId) {
+            const existingItem = customerItems.find(
+                item => item.id === editingItemId
+            );
+
+            if (!existingItem) {
+                throw new Error("The note could not be found. Refresh and try again.");
+            }
+
+            const { data, error } = await supabaseClient
                 .from("customer_items")
                 .update({
                     type: "Text",
-                    text: itemText,
+                    text: noteHtml,
                     file_path: null
                 })
                 .eq("id", editingItemId)
                 .eq("customer_id", selectedCustomerId)
-                .select("id")
+                .select()
                 .maybeSingle();
+
+            if (error) throw error;
+
+            if (!data) {
+                throw new Error(
+                    "The note was not updated. Check your Supabase permissions."
+                );
+            }
         } else {
-            const nextOrder = customerItems.length > 0
-                ? Math.max(
-                    ...customerItems.map(
-                        item => Number(item.sort_order) || 0
-                    )
-                ) + 1
+            const nextSortOrder = customerItems.length
+                ? Math.max(...customerItems.map(item =>
+                    Number(item.sort_order) || 0
+                )) + 1
                 : 1;
 
-            // Important: type must be "Text", not "Note" or "Task".
-            // The current database constraint requires text NOT NULL
-            // and file_path NULL for a Text item.
-            result = await db
+            const { error } = await supabaseClient
                 .from("customer_items")
                 .insert({
-                    id: crypto.randomUUID(),
+                    id: makeId(),
                     customer_id: selectedCustomerId,
                     type: "Text",
-                    text: itemText,
+                    text: noteHtml,
                     file_path: null,
                     original_file_name: null,
-                    sort_order: nextOrder,
-                    created_at: new Date().toISOString()
-                })
-                .select("id")
-                .single();
+                    sort_order: nextSortOrder,
+                    created_at: now
+                });
+
+            if (error) throw error;
         }
 
-        if (result.error) throw result.error;
+        $("itemDialog").close();
 
-        if (!result.data) {
-            throw new Error(
-                "The information was not saved. Check your database permissions."
-            );
-        }
+        await loadCustomerItems(selectedCustomerId);
 
-        closeItemDialog();
-        await loadItems(selectedCustomerId);
-
-        showNotice(
-            wasEditing
-                ? "Information updated successfully."
-                : "Information added successfully.",
+        showStatus(
+            editingItemId ? "Note updated successfully." : "Note saved successfully.",
             "success"
         );
     } catch (error) {
-        setError(itemFormError, getErrorMessage(error));
+        console.error("Save note error:", error);
+        setError("itemFormError", getErrorMessage(error));
     } finally {
-        setButtonLoading(saveItemBtn, false, originalText);
-    }
-});
-
-// ==========================================
-// 11. DELETE NOTES
-// ==========================================
-
-async function deleteItem(item) {
-    const confirmed = window.confirm(
-        "Are you sure you want to delete this information?"
-    );
-
-    if (!confirmed) return;
-
-    try {
-        const { data, error } = await db
-            .from("customer_items")
-            .delete()
-            .eq("id", item.id)
-            .eq("customer_id", selectedCustomerId)
-            .select("id");
-
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-            throw new Error(
-                "The information was not deleted. Check your database permissions."
-            );
-        }
-
-        await loadItems(selectedCustomerId);
-        showNotice("Information deleted successfully.", "success");
-    } catch (error) {
-        showNotice(
-            "Could not delete information: " + getErrorMessage(error),
-            "error"
-        );
+        setButtonLoading("saveNoteButton", false);
     }
 }
 
-// ==========================================
-// 12. SEARCH
-// ==========================================
+async function deleteItem(itemId) {
+    const item = customerItems.find(note => note.id === itemId);
 
-searchInput.addEventListener("input", renderCustomerList);
+    if (!item) return;
 
-// ==========================================
-// 13. START APPLICATION
-// ==========================================
-
-async function startApplication() {
-    if (sessionStorage.getItem(SESSION_KEY) !== "true") {
-        showLogin();
+    if (!window.confirm("Are you sure you want to delete this note?")) {
         return;
     }
 
-    showApplication();
-
     try {
-        await loadCustomers();
+        const { error } = await supabaseClient
+            .from("customer_items")
+            .delete()
+            .eq("id", itemId)
+            .eq("customer_id", selectedCustomerId);
+
+        if (error) throw error;
+
+        await loadCustomerItems(selectedCustomerId);
+
+        showStatus("Note deleted successfully.", "success");
     } catch (error) {
-        showNotice(
-            "Could not load customers: " + getErrorMessage(error),
-            "error"
-        );
+        console.error("Delete note error:", error);
+        showStatus(getErrorMessage(error), "error");
     }
 }
 
-startApplication();
+/* =========================================
+   10. RICH TEXT EDITOR
+========================================= */
+
+function applyEditorCommand(command, value = null) {
+    $("itemTextInput").focus();
+
+    try {
+        document.execCommand(command, false, value);
+    } catch (error) {
+        console.error("Editor command error:", error);
+    }
+}
+
+function setupEditor() {
+    document.querySelectorAll("[data-command]").forEach(button => {
+        button.addEventListener("click", () => {
+            applyEditorCommand(button.dataset.command);
+        });
+    });
+
+    $("fontSizeSelect").addEventListener("change", event => {
+        applyEditorCommand("fontSize", event.target.value);
+        event.target.value = "3";
+    });
+
+    $("textAlignSelect").addEventListener("change", event => {
+        const commands = {
+            left: "justifyLeft",
+            center: "justifyCenter",
+            right: "justifyRight"
+        };
+
+        applyEditorCommand(commands[event.target.value] || "justifyLeft");
+    });
+
+    $("clearFormattingButton").addEventListener("click", () => {
+        applyEditorCommand("removeFormat");
+    });
+}
+
+/* =========================================
+   11. EVENT LISTENERS
+========================================= */
+
+function setupEventListeners() {
+    $("loginForm").addEventListener("submit", handleLogin);
+
+    $("logoutButton").addEventListener("click", handleLogout);
+
+    $("addCustomerButton").addEventListener("click", () => {
+        openCustomerDialog();
+    });
+
+    $("customerForm").addEventListener("submit", handleCustomerSave);
+
+    $("editCustomerButton").addEventListener("click", () => {
+        const customer = customers.find(
+            item => item.id === selectedCustomerId
+        );
+
+        if (customer) openCustomerDialog(customer);
+    });
+
+    $("deleteCustomerButton").addEventListener(
+        "click",
+        deleteSelectedCustomer
+    );
+
+    $("addNoteButton").addEventListener("click", () => {
+        openItemDialog();
+    });
+
+    $("itemForm").addEventListener("submit", handleItemSave);
+
+    $("customerSearch").addEventListener("input", renderCustomers);
+
+    $("refreshButton").addEventListener("click", loadCustomers);
+
+    $("customerList").addEventListener("click", event => {
+        const button = event.target.closest("[data-customer-id]");
+
+        if (!button) return;
+
+        selectCustomer(button.dataset.customerId);
+    });
+
+    $("notesList").addEventListener("click", event => {
+        const editButton = event.target.closest("[data-edit-item]");
+        const deleteButton = event.target.closest("[data-delete-item]");
+
+        if (editButton) {
+            const item = customerItems.find(
+                note => note.id === editButton.dataset.editItem
+            );
+
+            if (item) openItemDialog(item);
+        }
+
+        if (deleteButton) {
+            deleteItem(deleteButton.dataset.deleteItem);
+        }
+    });
+
+    document.querySelectorAll("[data-close]").forEach(button => {
+        button.addEventListener("click", () => {
+            const dialog = $(button.dataset.close);
+
+            if (dialog) dialog.close();
+        });
+    });
+
+    
+    document.querySelectorAll("dialog").forEach(dialog => {
+        dialog.addEventListener("click", event => {
+            // Do not close the dialog when clicking outside it.
+            if (event.target === dialog) {
+                event.preventDefault();
+            }
+        });
+
+        // Prevent accidental closing with the Escape key.
+        dialog.addEventListener("cancel", event => {
+            event.preventDefault();
+        });
+    });
+
+
+    setupEditor();
+}
+
+$("closeNoteButton").addEventListener("click", () => {
+    const confirmed = window.confirm(
+        "Close the editor? Your unsaved changes will be lost."
+    );
+
+    if (confirmed) {
+        $("itemDialog").close();
+    }
+});
+
+
+/* =========================================
+   12. START APPLICATION
+========================================= */
+
+async function initializeApp() {
+    setupEventListeners();
+
+    if (sessionStorage.getItem(SESSION_KEY) === "true") {
+        showApplication();
+        await loadCustomers();
+    } else {
+        showLogin();
+    }
+}
+
+document.addEventListener("DOMContentLoaded", initializeApp);

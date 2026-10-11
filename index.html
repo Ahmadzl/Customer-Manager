@@ -1,227 +1,281 @@
 
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#f4f7fb">
-    <title>Customer Manager</title>
+    <title>CustomerInfo</title>
 
     <link rel="stylesheet" href="style.css">
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
 
+    <!-- LOGIN -->
     <section id="loginView" class="login-page">
-        <div class="login-card">
-            <div class="brand-icon">CM</div>
-            <h1>Customer Manager</h1>
+        <form id="loginForm" class="login-card">
+            <div class="brand-mark">C</div>
+            <h1>CustomerInfo</h1>
             <p class="muted">Sign in to manage your customers</p>
 
-            <form id="loginForm">
-                <label for="username">Username</label>
-                <input id="username" type="text"
-                       placeholder="Enter your username"
-                       autocomplete="username" required>
+            <label for="username">Username</label>
+            <input
+                id="username"
+                name="username"
+                type="text"
+                autocomplete="username"
+                placeholder="Enter username"
+                required
+            >
 
-                <label for="password">Password</label>
-                <input id="password" type="password"
-                       placeholder="Enter your password"
-                       autocomplete="current-password" required>
+            <label for="password">Password</label>
+            <input
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Enter password"
+                required
+            >
 
-                <p id="loginError" class="error-message" role="alert"></p>
-                <button type="submit" class="primary-button full-width">
-                    Sign In
-                </button>
-            </form>
+            <p id="loginError" class="error-message" role="alert"></p>
 
-            <p class="login-footer">Customer information portal</p>
-        </div>
+            <button id="loginButton" class="primary-button" type="submit">
+                Sign In
+            </button>
+        </form>
     </section>
 
+    <!-- APPLICATION -->
     <div id="appView" class="app hidden">
         <header class="topbar">
             <div class="brand">
-                <div class="brand-icon small">CM</div>
+                <div class="brand-mark small">C</div>
                 <div>
-                    <h1>Customer Manager</h1>
-                    <p>Customer information portal</p>
+                    <h1>CustomerInfo</h1>
+                    <p>Customer management</p>
                 </div>
             </div>
-            <button id="logoutBtn" class="secondary-button">Log Out</button>
+
+            <button id="logoutButton" class="secondary-button" type="button">
+                Sign Out
+            </button>
         </header>
 
-        <main class="dashboard">
-            <section class="welcome-row">
+        <main class="main-content">
+            <section class="page-heading">
                 <div>
                     <h2>Customers</h2>
-                    <p class="muted">Manage your customer information in one place.</p>
+                    <p>Manage customer information and notes.</p>
                 </div>
-                <button id="addCustomerBtn" class="primary-button">
+
+                <button id="addCustomerButton" class="primary-button" type="button">
                     + Add Customer
                 </button>
             </section>
 
-            <div id="notice" class="notice hidden" role="status"></div>
-
-            <section class="summary-card">
-                <div class="summary-icon">👥</div>
-                <div>
-                    <p class="summary-label">Total Customers</p>
-                    <strong id="customerCount">0</strong>
+            <section class="toolbar">
+                <div class="search-box">
+                    <span aria-hidden="true">⌕</span>
+                    <input
+                        id="customerSearch"
+                        type="search"
+                        placeholder="Search by customer number or name..."
+                    >
                 </div>
+
+                <button id="refreshButton" class="secondary-button" type="button">
+                    Refresh
+                </button>
             </section>
 
-            <section class="workspace">
-                <aside class="customer-panel">
+            <div id="statusMessage" class="status-message" role="status"></div>
+
+            <div class="workspace">
+                <section class="customer-panel">
                     <div class="panel-heading">
                         <h3>Customer List</h3>
-                    </div>
-
-                    <div class="search-box">
-                        <span>⌕</span>
-                        <input id="searchInput" type="search"
-                               placeholder="Search by name or number..."
-                               aria-label="Search customers">
+                        <span id="customerCount" class="count-badge">0</span>
                     </div>
 
                     <div id="customerList" class="customer-list">
-                        <p class="muted loading-text">Loading customers...</p>
+                        <p class="empty-state">Loading customers...</p>
                     </div>
-                </aside>
+                </section>
 
                 <section class="details-panel">
-                    <div id="emptySelection" class="empty-state">
-                        <div class="empty-icon">👤</div>
-                        <h3>No Customer Selected</h3>
-                        <p>Select a customer from the list to view their information.</p>
-                        <button id="emptyAddCustomerBtn" class="primary-button">
-                            Add Your First Customer
-                        </button>
+                    <div id="emptyDetails" class="empty-details">
+                        <div class="empty-icon">▤</div>
+                        <h3>Select a customer</h3>
+                        <p>Select a customer from the list to view their details and notes.</p>
                     </div>
 
                     <div id="customerDetails" class="hidden">
-                        <div class="profile-header">
-                            <div id="customerAvatar" class="avatar">C</div>
-
-                            <div class="profile-info">
-                                <h2 id="profileName">Customer Name</h2>
-                                <p>Customer No.: <strong id="profileNumber"></strong></p>
+                        <div class="details-header">
+                            <div>
+                                <p class="eyebrow">CUSTOMER DETAILS</p>
+                                <h2 id="detailCustomerName"></h2>
+                                <p id="detailCustomerNumber" class="muted"></p>
                             </div>
 
-                            <div class="profile-actions">
-                                <button id="editCustomerBtn" class="secondary-button">
+                            <div class="action-group">
+                                <button id="editCustomerButton" class="secondary-button" type="button">
                                     Edit
                                 </button>
-                                <button id="deleteCustomerBtn" class="danger-button">
+                                <button id="deleteCustomerButton" class="danger-button" type="button">
                                     Delete
                                 </button>
                             </div>
                         </div>
 
-                        <div class="section-heading">
-                            <div>
-                                <h3>Customer Information</h3>
-                                <p class="muted">Basic customer details</p>
-                            </div>
-                        </div>
-
-                        <div class="information-card">
-                            <div class="information-row">
-                                <span>Customer Name</span>
-                                <strong id="infoName"></strong>
-                            </div>
-                            <div class="information-row">
+                        <div class="info-grid">
+                            <div class="info-card">
                                 <span>Customer Number</span>
-                                <strong id="infoNumber"></strong>
+                                <strong id="detailNumberValue">—</strong>
+                            </div>
+
+                            <div class="info-card">
+                                <span>Created</span>
+                                <strong id="detailCreatedAt">—</strong>
                             </div>
                         </div>
 
-                        <div class="section-heading items-heading">
+                        <div class="notes-heading">
                             <div>
-                                <h3>Notes &amp; Information</h3>
-                                <p class="muted">Notes saved for this customer</p>
+                                <h3>Notes</h3>
+                                <p class="muted">Keep important information for this customer.</p>
                             </div>
-                            <button id="addItemBtn" class="primary-button">
+
+                            <button id="addNoteButton" class="primary-button" type="button">
                                 + Add Note
                             </button>
                         </div>
 
-                        <div id="itemsList" class="items-list">
-                            <p class="muted">Loading information...</p>
+                        <div id="notesList" class="notes-list">
+                            <p class="empty-state">Select a customer to view notes.</p>
                         </div>
                     </div>
                 </section>
-            </section>
-
-            <footer class="page-footer">
-                Customer Manager · Powered by Supabase
-            </footer>
+            </div>
         </main>
     </div>
 
-    <dialog id="customerDialog" class="app-dialog">
+    <!-- CUSTOMER DIALOG -->
+    <dialog id="customerDialog" class="modal">
         <form id="customerForm">
-            <div class="dialog-header">
+            <div class="modal-header">
                 <div>
                     <h2 id="customerDialogTitle">Add Customer</h2>
                     <p class="muted">Enter the customer details below.</p>
                 </div>
-                <button type="button" id="closeCustomerDialog"
-                        class="icon-button" aria-label="Close">×</button>
+                <button class="icon-button" type="button" data-close="customerDialog"
+                        aria-label="Close">×</button>
             </div>
 
-            <label for="customerNameInput">Customer Name *</label>
-            <input id="customerNameInput" type="text" maxlength="200"
-                   placeholder="Enter customer name" required>
+            <div class="form-field">
+                <label for="customerNumberInput">Customer Number</label>
+                <input
+                    id="customerNumberInput"
+                    type="text"
+                    maxlength="100"
+                    placeholder="Enter customer number"
+                    required
+                >
+            </div>
 
-            <label for="customerNumberInput">Customer Number *</label>
-            <input id="customerNumberInput" type="text" maxlength="100"
-                   placeholder="e.g. CUST-001" required>
+            <div class="form-field">
+                <label for="customerNameInput">Customer Name</label>
+                <input
+                    id="customerNameInput"
+                    type="text"
+                    maxlength="200"
+                    placeholder="Enter customer name"
+                    required
+                >
+            </div>
 
             <p id="customerFormError" class="error-message" role="alert"></p>
 
-            <div class="dialog-actions">
-                <button type="button" id="cancelCustomerBtn" class="secondary-button">
+            <div class="modal-actions">
+                <button class="secondary-button" type="button" data-close="customerDialog">
                     Cancel
                 </button>
-                <button type="submit" id="saveCustomerBtn" class="primary-button">
+                <button id="saveCustomerButton" class="primary-button" type="submit">
                     Save Customer
                 </button>
             </div>
         </form>
     </dialog>
 
-    <dialog id="itemDialog" class="app-dialog">
+    <!-- NOTE DIALOG -->
+    <dialog id="itemDialog" class="modal note-modal">
         <form id="itemForm">
-            <div class="dialog-header">
+            <div class="modal-header">
                 <div>
                     <h2 id="itemDialogTitle">Add Note</h2>
-                    <p class="muted">Save information for the selected customer.</p>
+                    <p class="muted">Write and format your customer note.</p>
                 </div>
-                <button type="button" id="closeItemDialog"
-                        class="icon-button" aria-label="Close">×</button>
+                <button
+                    class="icon-button"
+                    type="button"
+                    id="closeNoteButton"
+                    aria-label="Close note editor"
+                    title="Close editor"
+                >×</button>
             </div>
 
-            <label for="itemTypeInput">Type</label>
-            <select id="itemTypeInput">
-                <option value="Text">Text</option>
-            </select>
+            <div class="editor-toolbar" role="toolbar" aria-label="Text formatting">
+                <button type="button" data-command="bold" title="Bold"><strong>B</strong></button>
+                <button type="button" data-command="italic" title="Italic"><em>I</em></button>
+                <button type="button" data-command="underline" title="Underline"><u>U</u></button>
 
-            <label for="itemTextInput">Details *</label>
-            <textarea id="itemTextInput" rows="5" maxlength="10000"
-                      placeholder="Enter notes or customer information..."
-                      required></textarea>
+                <span class="toolbar-divider"></span>
+
+                <button type="button" data-command="insertUnorderedList" title="Bullet list">• List</button>
+                <button type="button" data-command="insertOrderedList" title="Numbered list">1. List</button>
+
+                <span class="toolbar-divider"></span>
+
+                <select id="fontSizeSelect" aria-label="Font size">
+                    <option value="3">Normal</option>
+                    <option value="2">Small</option>
+                    <option value="4">Large</option>
+                    <option value="5">Extra Large</option>
+                    <option value="6">Heading</option>
+                </select>
+
+                <select id="textAlignSelect" aria-label="Text alignment">
+                    <option value="left">Align Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Align Right</option>
+                </select>
+
+                <button id="clearFormattingButton" type="button" title="Clear formatting">
+                    Clear
+                </button>
+            </div>
+
+            <div
+                id="itemTextInput"
+                class="rich-editor"
+                contenteditable="true"
+                role="textbox"
+                aria-label="Note content"
+                aria-multiline="true"
+                data-placeholder="Write your note here..."
+            ></div>
 
             <p id="itemFormError" class="error-message" role="alert"></p>
 
-            <div class="dialog-actions">
-                <button type="button" id="cancelItemBtn" class="secondary-button">
+            <div class="modal-actions">
+                <button class="secondary-button" type="button" data-close="itemDialog">
                     Cancel
                 </button>
-                <button type="submit" id="saveItemBtn" class="primary-button">
-                    Save Information
+                <button id="saveNoteButton" class="primary-button" type="submit">
+                    Save Note
                 </button>
             </div>
         </form>
